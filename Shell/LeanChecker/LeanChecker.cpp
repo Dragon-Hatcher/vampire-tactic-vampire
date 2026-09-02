@@ -21,6 +21,8 @@
 #include "Shell/InferenceReplay.hpp"
 #include "VariablePrenexOrderingTree.hpp"
 #include <algorithm>
+#include <sstream>
+#include <string>
 #include <cstdlib>
 #include <deque>
 #include <initializer_list>
@@ -954,8 +956,130 @@ void LeanChecker::outputSatFormula(std::ostream &out, std::set<Unit *, CompareUn
   }
 }
 
+void LeanChecker::outputSatClauseOf(std::ostream &out, SAT::SATClause *cl, std::string primed, bool boolSymbols)
+{
+  std::map<unsigned, bool> seen;
+  for(SAT::SATLiteral l : cl->iter())
+    seen.insert(std::make_pair(l.var(), l.positive()));
+  if(seen.empty()) {
+    // the empty clause
+    out << (boolSymbols ? "false" : "False");
+    return;
+  }
+  outputSatClause(out, seen, primed, boolSymbols);
+}
+
+bool LeanChecker::avatarRefutationByResolution(std::ostream &out, Unit *concl)
+{
+  SAT::SATClause *proof = concl->inference().satPremise();
+  if(!proof)
+    return false;
+
+  std::set<Unit *, CompareUnits> sortedParents;
+  for(Unit *u : iterTraits(concl->getParents()))
+    sortedParents.insert(u);
+
+  // Key a clause by its literal set: the leaves of the solver's derivation and the
+  // clauses recorded on the parent units need not be the same SATClause object.
+  auto keyOf = [](SAT::SATClause *cl) {
+    std::map<unsigned, bool> m;
+    for(SAT::SATLiteral l : cl->iter())
+      m.insert(std::make_pair(l.var(), l.positive()));
+    return m;
+  };
+
+  std::map<std::map<unsigned, bool>, std::string> inputName;
+  unsigned hyp = 0;
+  for(Unit *u : sortedParents) {
+    SAT::SATClause *cl = env.proofExtra.get<Indexing::SATClauseExtra>(u).clause;
+    inputName.emplace(keyOf(cl), "h" + std::to_string(hyp));
+    hyp++;
+  }
+
+  // Post-order walk of the derivation. A clause with a propositional inference was
+  // derived by the solver; anything else is an input and already has a hypothesis.
+  std::vector<SAT::SATClause *> order;
+  std::set<SAT::SATClause *> visited;
+  std::vector<std::pair<SAT::SATClause *, bool>> todo;
+  todo.push_back(std::make_pair(proof, false));
+  while(!todo.empty()) {
+    SAT::SATClause *cl = todo.back().first;
+    bool expanded = todo.back().second;
+    todo.pop_back();
+    if(expanded) { order.push_back(cl); continue; }
+    if(!visited.insert(cl).second) continue;
+    SAT::SATInference *inf = cl->inference();
+    if(!inf || inf->getType() != SAT::SATInference::PROP_INF) continue;
+    todo.push_back(std::make_pair(cl, true));
+    for(SAT::SATClause *prem : iterTraits(inf->propInf()->getPremises()->iter()))
+      todo.push_back(std::make_pair(prem, false));
+  }
+
+  if(order.empty())
+    return false;
+
+  std::map<SAT::SATClause *, std::string> derivedName;
+  for(unsigned i = 0; i < order.size(); i++)
+    derivedName[order[i]] = "u" + std::to_string(i);
+
+  // Resolve a premise to the name that will carry it, or fail.
+  bool ok = true;
+  auto nameOfPremise = [&](SAT::SATClause *cl) {
+    auto d = derivedName.find(cl);
+    if(d != derivedName.end()) return d->second;
+    auto n = inputName.find(keyOf(cl));
+    if(n != inputName.end()) return n->second;
+    ok = false;
+    return std::string("?");
+  };
+
+  // Build into a buffer first: the caller has already emitted "theorem inf_sN", so we
+  // must not write anything unless we can produce the whole thing.
+  std::ostringstream body;
+  for(unsigned i = 0; i < order.size(); i++) {
+    SAT::SATClause *cl = order[i];
+    if(i == 0)
+      body << "_r0 : ";
+    else
+      body << "theorem inf_s" << concl->number() << "_r" << i << " : ";
+    for(SAT::SATClause *prem : iterTraits(cl->inference()->propInf()->getPremises()->iter())) {
+      outputSatClauseOf(body, prem);
+      body << " → ";
+    }
+    outputSatClauseOf(body, cl);
+    body << " := by\n" << indent << "grind only [cases Or]\n\n";
+  }
+
+  body << "theorem inf_s" << concl->number() << " : ";
+  outputSatFormula(body, sortedParents, "", false, true);
+  body << " → ";
+  outputUnit(body, concl);
+  body << " := by\n" << indent << "intro";
+  for(unsigned i = 0; i < hyp; i++)
+    body << " h" << i;
+  body << "\n";
+  for(unsigned i = 0; i < order.size(); i++) {
+    body << indent << "have u" << i << " := inf_s" << concl->number();
+    if(i == 0) body << "_r0"; else body << "_r" << i;
+    for(SAT::SATClause *prem : iterTraits(order[i]->inference()->propInf()->getPremises()->iter()))
+      body << " " << nameOfPremise(prem);
+    body << "\n";
+  }
+  body << indent << "exact u" << (order.size() - 1) << "\n\n";
+
+  if(!ok)
+    return false;
+  out << body.str();
+  return true;
+}
+
 void LeanChecker::avatarRefutation(std::ostream &out, SortMap &conclSorts, Unit *concl)
 {
+  // Prefer replaying the solver's own derivation; bv_decide re-solves from scratch and
+  // its cost grows sharply with the length of the refutation.
+  if(avatarRefutationByResolution(out, concl))
+    return;
+
   out << "' (";
   std::set<unsigned> seen;
   for(Unit *u : iterTraits(concl->getParents()))

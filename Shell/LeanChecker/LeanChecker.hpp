@@ -143,6 +143,14 @@ private:
   void outputSatClause(std::ostream &out, std::map<unsigned int, bool> &seen, std::string primed = "'", bool boolSymbols = false);
   void outputSatFormula(std::ostream &out, std::set<Unit *, CompareUnits> &parents, std::string primed = "'", bool useBoolOperators = false, bool useImplication = false);
   void avatarRefutation(std::ostream &out, SortMap &conclSorts, Unit *concl);
+  /**
+   * Emit the AVATAR SAT refutation as explicit resolution steps, replaying the
+   * derivation the SAT solver already found instead of asking Lean to re-solve it
+   * with bv_decide. Returns false if the derivation is unavailable or cannot be
+   * matched up, in which case the caller falls back to the bv_decide encoding.
+   */
+  bool avatarRefutationByResolution(std::ostream &out, Unit *concl);
+  void outputSatClauseOf(std::ostream &out, SAT::SATClause *cl, std::string primed = "", bool boolSymbols = false);
   void avatarRefutationProofStep(std::ostream &out, SortMap &conclSorts, Unit *concl);
   void avatarSplitClause(std::ostream &out, SortMap &conclSorts, Unit *concl);
   void            normalForm(std::ostream &out, SortMap &conclSorts, Unit *concl);
