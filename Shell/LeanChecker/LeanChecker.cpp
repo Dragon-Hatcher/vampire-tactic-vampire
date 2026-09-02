@@ -143,7 +143,9 @@ void LeanChecker::print()
   std::set_difference(usedPredicateSymbols.begin(), usedPredicateSymbols.end(), predicateSymbolsInUsedInput.begin(), predicateSymbolsInUsedInput.end(), std::inserter(unusedPredicateSymbols, unusedPredicateSymbols.end()));
 
   outputPreamble(out, usedFunctionSymbols, usedPredicateSymbols);
-  outputCumulativeSplits(proof, " ", "sA" ,"variable {", " : Prop}\n");
+  // Split propositions are bound per theorem by outputSplitBinders rather than declared
+  // as section variables: Lean rescans the whole variable block once per declaration,
+  // which is O(variables x declarations) and dominates on large proofs.
 
   for (Unit *u : proof) {
     if(u->inference().rule() == InferenceRule::INPUT){
@@ -399,6 +401,44 @@ void LeanChecker::outputProofStep(std::ostream &out, Kernel::Unit *u)
   }
 }
 
+void LeanChecker::outputSplitBindersForClauses(std::ostream &out, const std::vector<SAT::SATClause *> &clauses)
+{
+  std::set<unsigned> splits;
+  for(SAT::SATClause *cl : clauses)
+    for(SAT::SATLiteral l : cl->iter())
+      splits.insert(l.var());
+  if(splits.empty()) return;
+  out << " {";
+  bool first = true;
+  for(unsigned v : splits) { out << (first ? "" : " ") << "sA" << v; first = false; }
+  out << " : Prop}";
+}
+
+void LeanChecker::outputSplitBinders(std::ostream &out, Kernel::Unit *u)
+{
+  std::set<unsigned> splits;
+  auto addClause = [&](Kernel::Unit *v) {
+    if(!v->isClause()) return;
+    Kernel::Clause *c = v->asClause();
+    if(c->noSplits()) return;
+    SplitSet &s = *c->splits();
+    for(int i = 0; i < s.size(); i++)
+      splits.insert(Saturation::Splitter::getLiteralFromName(s[i]).var());
+  };
+  auto addSat = [&](Kernel::Unit *v) {
+    if(v->inference().rule() != InferenceRule::AVATAR_SPLIT_CLAUSE) return;
+    for(SAT::SATLiteral l : env.proofExtra.get<Indexing::SATClauseExtra>(v).clause->iter())
+      splits.insert(l.var());
+  };
+  addClause(u); addSat(u);
+  for(Kernel::Unit *p : iterTraits(u->getParents())) { addClause(p); addSat(p); }
+  if(splits.empty()) return;
+  out << " {";
+  bool first = true;
+  for(unsigned v : splits) { out << (first ? "" : " ") << "sA" << v; first = false; }
+  out << " : Prop}";
+}
+
 void LeanChecker::outputInferenceStep(std::ostream &out, Kernel::Unit *u){
   const InferenceRule& rule = u->inference().rule();
   if(isUncheckedInference(rule)){
@@ -434,6 +474,7 @@ void LeanChecker::outputInferenceStep(std::ostream &out, Kernel::Unit *u){
     out << "theorem inf_s" << u->number();
     if(u->inference().rule()!=InferenceRule::AVATAR_REFUTATION
        && u->inference().rule()!=InferenceRule::AVATAR_REFUTATION_SMT){
+      outputSplitBinders(out, u);
       out << " : ";
     }
   }
@@ -1044,10 +1085,16 @@ bool LeanChecker::avatarRefutationByResolution(std::ostream &out, Unit *concl)
   std::ostringstream body;
   for(unsigned i = 0; i < order.size(); i++) {
     SAT::SATClause *cl = order[i];
+    std::vector<SAT::SATClause *> involved;
+    for(SAT::SATClause *prem : iterTraits(cl->inference()->propInf()->getPremises()->iter()))
+      involved.push_back(prem);
+    involved.push_back(cl);
     if(i == 0)
-      body << "_r0 : ";
+      body << "_r0";
     else
-      body << "theorem inf_s" << concl->number() << "_r" << i << " : ";
+      body << "theorem inf_s" << concl->number() << "_r" << i;
+    outputSplitBindersForClauses(body, involved);
+    body << " : ";
     for(SAT::SATClause *prem : iterTraits(cl->inference()->propInf()->getPremises()->iter())) {
       outputSatClauseOf(body, prem);
       body << " → ";
@@ -1056,7 +1103,14 @@ bool LeanChecker::avatarRefutationByResolution(std::ostream &out, Unit *concl)
     body << " := by\n" << indent << "grind only [cases Or]\n\n";
   }
 
-  body << "theorem inf_s" << concl->number() << " : ";
+  body << "theorem inf_s" << concl->number();
+  {
+    std::vector<SAT::SATClause *> all;
+    for(Unit *pu : sortedParents)
+      all.push_back(env.proofExtra.get<Indexing::SATClauseExtra>(pu).clause);
+    outputSplitBindersForClauses(body, all);
+  }
+  body << " : ";
   outputSatFormula(body, sortedParents, "", false, true);
   body << " → ";
   outputUnit(body, concl);

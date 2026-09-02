@@ -36,6 +36,8 @@ public:
   void outputPreamble(std::ostream &out, std::set<Signature::Symbol*>& usedFunctionSymbols, std::set<Signature::Symbol*>& usedPredicateSymbols);
 
   void outputInferenceStep(std::ostream &out, Kernel::Unit *u);
+  void outputSplitBinders(std::ostream &out, Kernel::Unit *u);
+  void outputSplitBindersForClauses(std::ostream &out, const std::vector<SAT::SATClause *> &clauses);
 
   void outputProofStep(std::ostream &out, Kernel::Unit *u);
   
@@ -178,6 +180,9 @@ private:
          "section vamproof\n"
          "universe u\n"
          "set_option maxHeartbeats 0\n"
+         // Without this a split proposition we forget to bind becomes an auto-implicit:
+         // it still elaborates, but as a metavariable, which is far more expensive.
+         "set_option autoImplicit false\n"
          "set_option linter.all false\n"
          "set_option linter.unusedSectionVars false\n"
          "set_option linter.unusedTactic false\n"
