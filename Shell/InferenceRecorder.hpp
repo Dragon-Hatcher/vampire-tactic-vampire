@@ -51,6 +51,8 @@ public:
 
   /** Returns the lazily initialized recorder singleton. */
   static InferenceRecorder *instance();
+  /** Drop everything recorded about the previous problem's inferences. */
+  void reset(){ _inferences.clear(); }
 
   /** Records a resolution inference when it matches the current proof step. */
   void resolution(unsigned int id, Kernel::Clause *conclusion, const std::vector<Kernel::Clause *> &premises, const Indexing::ResultSubstitutionSP &recordedSubst);

@@ -1811,6 +1811,15 @@ void InferenceStore::outputProof(std::ostream& out, UnitList* units)
   pp->print();
 }
 
+void InferenceStore::reset()
+{
+  _splittingNameLiterals.reset();
+  _introducedSymbols.reset();
+  _introducedSymbolReplacedVars.reset();
+  _introducedSymbolFormulas.reset();
+  _introducedSplitNames.reset();
+}
+
 InferenceStore* InferenceStore::instance()
 {
   static ScopedPtr<InferenceStore> inst(new InferenceStore());

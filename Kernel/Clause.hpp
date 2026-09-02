@@ -385,6 +385,16 @@ protected:
   static bool _auxInUse;
 #endif
 
+public:
+  /** Release the aux-marking arena for a fresh problem (see Lib::resetGlobalState). */
+  static void resetAuxState() {
+    _auxCurrTimestamp = 0;
+#if VDEBUG
+    _auxInUse = false;
+#endif
+  }
+private:
+
   /** Array of literals of this unit */
   Literal* _literals[1];
 }; // class Clause

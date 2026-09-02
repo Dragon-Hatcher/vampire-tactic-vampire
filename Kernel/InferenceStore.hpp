@@ -40,6 +40,8 @@ public:
   typedef Stack<SymbolId> SymbolStack;
 
   static InferenceStore *instance();
+  /** Drop everything recorded about the previous problem's proof. */
+  void reset();
 
   typedef List<int> IntList;
 

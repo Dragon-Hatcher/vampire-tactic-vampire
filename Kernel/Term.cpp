@@ -1266,16 +1266,43 @@ Term* Term::create(unsigned fn, std::initializer_list<TermList> args)
 { return Term::create(fn, args.size(), args.begin()); }
 
 /**
- * Create singleton FOOL constants
+ * Create singleton FOOL constants.
+ *
+ * These used to be function-local statics, initialised once per process. That is
+ * fine for a one-shot executable, but when Vampire is embedded and the environment
+ * is rebuilt (Lib::resetGlobalState) the cached terms point into a freed signature
+ * and term-sharing table. They are file-scope now so `resetBuiltinCache` can drop
+ * them and let the next call rebuild against the new environment.
  */
+static Term* g_foolTrue = nullptr;
+static Term* g_foolFalse = nullptr;
+static AtomicSort* g_super = nullptr;
+static AtomicSort* g_default = nullptr;
+static AtomicSort* g_bool = nullptr;
+static AtomicSort* g_int = nullptr;
+static AtomicSort* g_real = nullptr;
+static AtomicSort* g_rat = nullptr;
+
+void Term::resetBuiltinCache()
+{
+  g_foolTrue = nullptr;
+  g_foolFalse = nullptr;
+  g_super = nullptr;
+  g_default = nullptr;
+  g_bool = nullptr;
+  g_int = nullptr;
+  g_real = nullptr;
+  g_rat = nullptr;
+}
+
 Term* Term::foolTrue(){
-  static Term* _foolTrue = createConstant(env.signature->getFoolConstantSymbol(true));
-  return _foolTrue;
+  if(!g_foolTrue) g_foolTrue = createConstant(env.signature->getFoolConstantSymbol(true));
+  return g_foolTrue;
 }
 
 Term* Term::foolFalse(){
-  static Term* _foolFalse = createConstant(env.signature->getFoolConstantSymbol(false));
-  return _foolFalse;
+  if(!g_foolFalse) g_foolFalse = createConstant(env.signature->getFoolConstantSymbol(false));
+  return g_foolFalse;
 }
 
 /*
@@ -1283,33 +1310,33 @@ Term* Term::foolFalse(){
  * and also is not linked to a symbol in the signature.
  */
 TermList AtomicSort::superSort(){
-  static AtomicSort* _super = createNonSharedConstant(0);
-  return TermList(_super);
+  if(!g_super) g_super = createNonSharedConstant(0);
+  return TermList(g_super);
 }
 
 TermList AtomicSort::defaultSort(){
-  static AtomicSort* _default = createConstant(env.signature->getDefaultSort());
-  return TermList(_default);
+  if(!g_default) g_default = createConstant(env.signature->getDefaultSort());
+  return TermList(g_default);
 }
 
 TermList AtomicSort::boolSort(){
-  static AtomicSort* _bool = createConstant(env.signature->getBoolSort());
-  return TermList(_bool);
+  if(!g_bool) g_bool = createConstant(env.signature->getBoolSort());
+  return TermList(g_bool);
 }
 
 TermList AtomicSort::intSort(){
-  static AtomicSort* _int = createConstant(env.signature->getIntSort());
-  return TermList(_int);
+  if(!g_int) g_int = createConstant(env.signature->getIntSort());
+  return TermList(g_int);
 }
 
 TermList AtomicSort::realSort(){
-  static AtomicSort* _real = createConstant(env.signature->getRealSort());
-  return TermList(_real);
+  if(!g_real) g_real = createConstant(env.signature->getRealSort());
+  return TermList(g_real);
 }
 
 TermList AtomicSort::rationalSort(){
-  static AtomicSort* _rat = createConstant(env.signature->getRatSort());
-  return TermList(_rat);
+  if(!g_rat) g_rat = createConstant(env.signature->getRatSort());
+  return TermList(g_rat);
 }
 
 TermList AtomicSort::arrowSort(TermList s1, TermList s2) {

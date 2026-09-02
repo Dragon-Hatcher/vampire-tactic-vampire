@@ -534,6 +534,7 @@ set(SOURCES
     Lib/Deque.hpp
     Lib/DynamicHeap.hpp
     Lib/Environment.cpp
+    Lib/Reset.cpp
     Lib/Environment.hpp
     Lib/Event.cpp
     Lib/Event.hpp

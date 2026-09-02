@@ -35,6 +35,9 @@ public:
   Environment();
   ~Environment();
 
+  /** Rebuild the environment for a fresh problem (see Lib::resetGlobalState). */
+  void reset();
+
   /** options for the current proof attempt */
   Shell::Options* options;
   /** currently used signature */
@@ -102,6 +105,7 @@ public:
   }
 
 private:
+  void init();
   Kernel::Problem* _problem;
   bool _higherOrder;
   // the fragment of the input problem before preprocessing: Problem's own

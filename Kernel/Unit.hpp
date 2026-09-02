@@ -147,6 +147,8 @@ public:
   static void onPreprocessingEnd();
   static void onParsingEnd(){ _lastParsingNumber = _lastNumber;}
   static unsigned getLastParsingNumber(){ return _lastParsingNumber;}
+  /** Restart unit numbering for a fresh problem (see Lib::resetGlobalState). */
+  static void resetCounters(){ _lastNumber = 0; _firstNonPreprocessingNumber = 0; _lastParsingNumber = 0; }
 
 protected:
   /** inference used to obtain the unit */

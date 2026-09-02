@@ -509,6 +509,9 @@ public:
   static Term* create2(unsigned fn, TermList arg1, TermList arg2);
 
   //** fool constants
+  /** Drop the cached built-in terms/sorts (see Lib::resetGlobalState). */
+  static void resetBuiltinCache();
+
   static Term* foolTrue(); 
   static Term* foolFalse(); 
 

@@ -33,33 +33,63 @@ namespace Lib
  * @since 06/05/2007 Manchester
  */
 Environment::Environment()
-  : signature(nullptr),
-    sharing(nullptr),
-    maxSineLevel(1),
-    predicateSineLevels(nullptr),
-    colorUsed(false),
-    _problem(nullptr),
-    _higherOrder(false)
+  : options(nullptr), signature(nullptr), sharing(nullptr), statistics(nullptr),
+    maxSineLevel(1), predicateSineLevels(nullptr), colorUsed(false),
+    _problem(nullptr), _higherOrder(false)
+{
+  init();
+} // Environment::Environment
+
+/**
+ * Allocate the components and register the built-in sorts.
+ *
+ * The order the sorts are created in is VITAL: a number of places rely on the type
+ * constructor for $i being 0, that for $o being 1, and so on.
+ */
+void Environment::init()
 {
   options = new Options;
-
   statistics = new Statistics;
   signature = new Signature;
   sharing = new Indexing::TermSharing;
 
   //view comment in Signature.cpp
   signature->addEquality();
-  // These functions are called here in order to ensure the order
-  // of creation of these sorts. The order is VITAL. 
-  //
-  // A number of places in the code rely on the type constructor for
-  // $i being 0, that for $o being 1 and so on.
   AtomicSort::defaultSort();
   AtomicSort::boolSort();
   AtomicSort::intSort();
   AtomicSort::realSort();
   AtomicSort::rationalSort();
-} // Environment::Environment
+} // Environment::init
+
+/**
+ * Tear the environment down and build a fresh one, so another problem can be solved
+ * in the same process. See Lib::resetGlobalState, which resets this along with the
+ * other process-global state that a run leaves behind.
+ */
+void Environment::reset()
+{
+  delete sharing;
+  delete signature;
+  delete statistics;
+  delete predicateSineLevels;
+  delete options;
+
+  proofExtra.clear();
+
+  options = nullptr;
+  signature = nullptr;
+  sharing = nullptr;
+  statistics = nullptr;
+  predicateSineLevels = nullptr;
+  maxSineLevel = 1;
+  colorUsed = false;
+  reconstruction = false;
+  _problem = nullptr;
+  _higherOrder = false;
+
+  init();
+} // Environment::reset
 
 Environment::~Environment()
 {
