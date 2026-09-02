@@ -29,6 +29,9 @@ namespace Timer {
   /** Start the clock without spawning the limit-enforcement thread. */
 void startClock();
 
+/** Re-arm the exit lock taken by disableLimitEnforcement (see Lib::resetGlobalState). */
+void resetExitLock();
+
 void reinitialise(bool tryInitInstructionLimiting=true);
 
   // disables exit on resource out: call when a proof has been found!

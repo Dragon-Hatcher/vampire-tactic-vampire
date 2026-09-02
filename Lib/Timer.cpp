@@ -210,6 +210,18 @@ void disableLimitEnforcement() {
   EXIT_LOCK.lock();
 }
 
+/**
+ * Release the exit lock that disableLimitEnforcement takes.
+ *
+ * The executable takes it once, at the end of its single run, and exits. An embedded
+ * Vampire runs many times, and possibly from different threads, so the lock has to be
+ * re-armed or the second run blocks forever on it. Re-initialised by placement new, as
+ * reinitialise() does for the same object across a fork.
+ */
+void resetExitLock() {
+  ::new (&EXIT_LOCK) std::recursive_mutex;
+}
+
 // return elapsed time after `START_TIME`
 // must be thread-safe as it is called by the main process and timer_thread
 long elapsedMilliseconds() {

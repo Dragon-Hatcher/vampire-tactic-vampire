@@ -2,6 +2,7 @@
 
 #include "Lib/Environment.hpp"
 #include "Lib/Random.hpp"
+#include "Lib/Timer.hpp"
 #include "Kernel/Clause.hpp"
 #include "Kernel/InferenceStore.hpp"
 #include "Kernel/Ordering.hpp"
@@ -23,6 +24,10 @@ void resetGlobalState()
   Kernel::Clause::resetAuxState();
 
   Random::setSeed(1);
+
+  // Saturation ends by taking the exit lock and never releasing it; re-arm it or the
+  // next run blocks.
+  Timer::resetExitLock();
 
   // The built-in FOOL constants and sorts are cached; they point into the signature
   // and term-sharing table that env.reset() is about to free, so drop them first.
