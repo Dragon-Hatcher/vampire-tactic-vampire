@@ -26,7 +26,10 @@ namespace Timer {
   // 2. elapsed time (instructions) data should be live
   //
   // should be called exactly once per process as it internally spawns a std::thread
-  void reinitialise(bool tryInitInstructionLimiting=true);
+  /** Start the clock without spawning the limit-enforcement thread. */
+void startClock();
+
+void reinitialise(bool tryInitInstructionLimiting=true);
 
   // disables exit on resource out: call when a proof has been found!
   // permanently disabled per-process

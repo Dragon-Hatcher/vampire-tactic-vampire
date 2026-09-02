@@ -1,4 +1,5 @@
 #include "LeanChecker.hpp"
+#include "Lib/Exception.hpp"
 #include "Forwards.hpp"
 #include "Inferences/ProofExtra.hpp"
 #include "Kernel/Clause.hpp"
@@ -698,8 +699,9 @@ void LeanChecker::superposition(std::ostream &out, SortMap &conclSorts, Clause *
 
 void LeanChecker::demodulation(std::ostream &out, SortMap &conclSorts, Clause *concl, const InferenceRecorder::InferenceInformation *info){
   if(info == nullptr){
-    out << "PROBLEM IN DEMODULATION\n";
-    exit(10);
+    // Was exit(10). Embedded in another process (the Lean tactic) that terminates the
+    // host; throw so the caller can report a failure and carry on.
+    throw InvalidOperationException("leancheck: no replay information for demodulation");
   }
   genericNPremiseInference(out, conclSorts, concl, {Substitution(), info->substitutionForBanksSub[0]}, "grind only [cases Or]");
 }

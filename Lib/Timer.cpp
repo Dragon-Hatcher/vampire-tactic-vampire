@@ -142,6 +142,21 @@ static std::chrono::time_point<std::chrono::steady_clock> START_TIME;
 namespace Lib {
 namespace Timer {
 
+/**
+ * Start the clock without installing any limit enforcement.
+ *
+ * `reinitialise` additionally spawns a detached thread that terminates the process with
+ * std::_Exit when the limit is hit. That is right for the executable and fatal for an
+ * embedded Vampire, which must instead use SaturationAlgorithm::setSoftTimeLimit and
+ * let the cooperative check throw TimeLimitExceededException.
+ *
+ * The clock still has to be started, because the elapsed-time readings are relative to
+ * START_TIME.
+ */
+void startClock() {
+  START_TIME = std::chrono::steady_clock::now();
+}
+
 void reinitialise(bool tryInitInstructionLimiting) {
   // might (probably have) locked this in the parent process, release it for the child
   //
