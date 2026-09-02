@@ -231,6 +231,11 @@ endif()
 add_library(common OBJECT ${SOURCES})
 
 # the actual Vampire executable
+# A linkable archive of the same objects, for embedding Vampire in another process
+# (e.g. the Lean tactic's FFI). Unlike the executable it installs no signal
+# handlers and sets no rlimits -- see vampire_lib_init in the embedding shim.
+add_library(vampire_lib STATIC $<TARGET_OBJECTS:common>)
+
 add_executable(vampire vampire.cpp $<TARGET_OBJECTS:common>)
 
 install(TARGETS vampire)
