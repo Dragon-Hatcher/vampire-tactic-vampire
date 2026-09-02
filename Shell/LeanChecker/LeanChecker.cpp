@@ -767,8 +767,14 @@ void LeanChecker::clausify(std::ostream &out, SortMap &conclSorts, Unit *concl){
       indent << indent << "try simp only\n" <<
       indent << indent << "prenexify at " << stepIdent << parent->number() << "<;>\n";
     outputReorderIfNeeded(out, parent, conclSorts, indent);
+    // `ac_nf` is `ac_nf0 <;> try trivial`, and `trivial` runs `contradiction` first.
+    // Inside the final assembly the local context holds every step derived so far, so
+    // that scan dominates: on ALG190+1 it was 70s across 31 calls. `assumption` closes
+    // these goals just as well and is tried first; `trivial` stays as the fallback so
+    // nothing that used to be provable stops being provable.
     out << indent << indent << "ac_nf0<;>\n" <<
-      indent << indent << "ac_nf at " << stepIdent << parent->number() << "\n\n";
+      indent << indent << "ac_nf0 at " << stepIdent << parent->number()
+             << " <;> try (first | assumption | trivial)\n\n";
     return;
   }
   //SortMap parentMap;
