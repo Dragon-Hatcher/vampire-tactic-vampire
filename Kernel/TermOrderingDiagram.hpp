@@ -52,6 +52,10 @@ struct TermOrderingDiagram
 public:
   static TermOrderingDiagram* createForSingleComparison(const Ordering& ord, TermList lhs, TermList rhs);
   static bool extendVarsGreater(TermOrderingDiagram* tod, const SubstApplicator* appl, POStruct& po_struct);
+  /** Drop the single-comparison cache. Its entries key on terms from the sharing table
+   *  and keep a reference to the ordering, so they cannot outlive either;
+   *  `Lib::resetGlobalState` calls this. */
+  static void resetCache();
 
   TermOrderingDiagram(const Ordering& ord, bool ground);
   virtual ~TermOrderingDiagram();

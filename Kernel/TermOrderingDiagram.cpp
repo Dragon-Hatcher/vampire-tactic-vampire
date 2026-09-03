@@ -29,13 +29,45 @@ static Ordering::Result kGtPtr = Ordering::GREATER;
 static Ordering::Result kEqPtr = Ordering::EQUAL;
 static Ordering::Result kLtPtr = Ordering::LESS;
 
+/**
+ * The single-comparison diagrams, at file scope so `resetCache` can drop them, with the
+ * diagrams themselves also held in a stack because that is what owns them.
+ *
+ * Same shape as `TermPartialOrdering`'s caches and the same hazard: the key is a pair of
+ * `TermList`s from the term-sharing table and the value keeps a `const Ordering&`, so an
+ * entry cached under one problem must not be handed to the next. Less immediately fatal
+ * than `TermPartialOrdering::getEmpty` was, because a lookup is keyed by term address
+ * and the next problem's terms are usually elsewhere — but Vampire's allocator recycles
+ * the memory the sharing table just released, so "usually" is the whole guarantee.
+ */
+static Map<tuple<TermList,TermList>,TermOrderingDiagram*>* _singleComparisons = nullptr;
+static Stack<TermOrderingDiagram*>* _singleComparisonsOwned = nullptr;
+
+void TermOrderingDiagram::resetCache()
+{
+  if (_singleComparisonsOwned) {
+    for (auto* tod : *_singleComparisonsOwned) {
+      delete tod;
+    }
+    delete _singleComparisonsOwned;
+    _singleComparisonsOwned = nullptr;
+  }
+  delete _singleComparisons;
+  _singleComparisons = nullptr;
+}
+
 TermOrderingDiagram* TermOrderingDiagram::createForSingleComparison(const Ordering& ord, TermList lhs, TermList rhs)
 {
-  static Map<tuple<TermList,TermList>,TermOrderingDiagram*> cache; // TODO this leaks now
+  if (!_singleComparisons) {
+    _singleComparisons = new Map<tuple<TermList,TermList>,TermOrderingDiagram*>();
+    _singleComparisonsOwned = new Stack<TermOrderingDiagram*>();
+  }
+  auto& cache = *_singleComparisons;
 
   TermOrderingDiagram** ptr;
   if (cache.getValuePtr({ lhs, rhs }, ptr, nullptr)) {
     *ptr = ord.createTermOrderingDiagram(/*ground*/true).release();
+    _singleComparisonsOwned->push(*ptr);
     (*ptr)->_source = Branch(lhs, rhs);
     (*ptr)->_source.node()->gtBranch  = Branch(&kGtPtr, (*ptr)->_sink);
     (*ptr)->_source.node()->eqBranch  = Branch(&kEqPtr, (*ptr)->_sink);

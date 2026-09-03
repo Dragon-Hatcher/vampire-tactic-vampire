@@ -8,6 +8,7 @@
 #include "Kernel/Ordering.hpp"
 #include "Saturation/SaturationAlgorithm.hpp"
 #include "Kernel/Term.hpp"
+#include "Kernel/TermOrderingDiagram.hpp"
 #include "Kernel/TermPartialOrdering.hpp"
 #include "Kernel/Unit.hpp"
 #include "Shell/InferenceRecorder.hpp"
@@ -43,6 +44,7 @@ void resetGlobalState()
   // reached from forward demodulation, which is why only problems large enough to
   // demodulate ever saw it.
   Kernel::TermPartialOrdering::resetCache();
+  Kernel::TermOrderingDiagram::resetCache();
 
   // Rebuilds options, signature, term sharing and statistics, and re-registers the
   // built-in sorts in the order the rest of the code depends on.
