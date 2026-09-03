@@ -8,6 +8,7 @@
 #include "Kernel/Ordering.hpp"
 #include "Saturation/SaturationAlgorithm.hpp"
 #include "Kernel/Term.hpp"
+#include "Kernel/TermPartialOrdering.hpp"
 #include "Kernel/Unit.hpp"
 #include "Shell/InferenceRecorder.hpp"
 
@@ -34,6 +35,14 @@ void resetGlobalState()
   // The built-in FOOL constants and sorts are cached; they point into the signature
   // and term-sharing table that env.reset() is about to free, so drop them first.
   Kernel::Term::resetBuiltinCache();
+
+  // Same shape, and the one that actually bit: `TermPartialOrdering` caches relations
+  // that keep a `const Ordering&` and `TermList`s from the term-sharing table. Held in
+  // function-local statics they are built once per process, so the second problem was
+  // handed the first problem's ordering and crashed on the first `_ord.compare` —
+  // reached from forward demodulation, which is why only problems large enough to
+  // demodulate ever saw it.
+  Kernel::TermPartialOrdering::resetCache();
 
   // Rebuilds options, signature, term sharing and statistics, and re-registers the
   // built-in sorts in the order the rest of the code depends on.

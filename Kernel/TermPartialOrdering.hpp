@@ -60,6 +60,10 @@ public:
   static const TermPartialOrdering* getEmpty(const Ordering& ord);
   /** Set relation between two terms given by a term ordering constraint. */
   static const TermPartialOrdering* set(const TermPartialOrdering* tpo, TermOrderingConstraint con);
+  /** Drop the cached relations. They keep a reference to the `Ordering` they were built
+   *  under and `TermList`s from the term-sharing table, so they cannot be carried into
+   *  a second problem; `Lib::resetGlobalState` calls this. */
+  static void resetCache();
 
   friend std::ostream& operator<<(std::ostream& str, const TermPartialOrdering& tpo);
 

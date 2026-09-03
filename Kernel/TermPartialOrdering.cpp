@@ -122,17 +122,38 @@ bool TermPartialOrdering::get(TermList lhs, TermList rhs, Result& res) const
   }
 }
 
+/**
+ * The empty relation and the `set` cache.
+ *
+ * At file scope rather than in function-local statics so that `resetCache` can drop
+ * them. They must not outlive the run that filled them: a `TermPartialOrdering` keeps a
+ * `const Ordering&` and `TermList`s from the term-sharing table, and a function-local
+ * static is initialised once per process. Embedded in a host that solves more than one
+ * problem, the second run is then handed relations built against the first run's
+ * ordering, and dies on the first `_ord.compare` — inside forward demodulation, by way
+ * of `TermOrderingDiagram`.
+ */
+static TermPartialOrdering* _empty = nullptr;
+
+using SetCache = DHMap<std::tuple<const TermPartialOrdering*, TermList, TermList, Result>,
+                       const TermPartialOrdering*>;
+static SetCache* _setCache = nullptr;
+
 const TermPartialOrdering* TermPartialOrdering::getEmpty(const Ordering& ord)
 {
-  static TermPartialOrdering empty(ord);
-  return &empty;
+  if (!_empty) {
+    _empty = new TermPartialOrdering(ord);
+  }
+  return _empty;
 }
 
 const TermPartialOrdering* TermPartialOrdering::set(const TermPartialOrdering* tpo, TermOrderingConstraint con)
 {
-  static DHMap<std::tuple<const TermPartialOrdering*, TermList, TermList, Result>, const TermPartialOrdering*> cache;
+  if (!_setCache) {
+    _setCache = new SetCache();
+  }
   const TermPartialOrdering** ptr;
-  if (cache.getValuePtr(make_tuple(tpo, con.lhs, con.rhs, con.rel), ptr, nullptr)) {
+  if (_setCache->getValuePtr(make_tuple(tpo, con.lhs, con.rhs, con.rel), ptr, nullptr)) {
     auto res = new TermPartialOrdering(*tpo);
     if (!res->set(con)) {
       delete res;
@@ -142,6 +163,22 @@ const TermPartialOrdering* TermPartialOrdering::set(const TermPartialOrdering* t
     }
   }
   return *ptr;
+}
+
+void TermPartialOrdering::resetCache()
+{
+  if (_setCache) {
+    auto it = _setCache->items();
+    while (it.hasNext()) {
+      // Every non-null value was `new`ed by `set` above, and each key holds a distinct
+      // one, so this deletes each exactly once.
+      delete const_cast<TermPartialOrdering*>(it.next().second);
+    }
+    delete _setCache;
+    _setCache = nullptr;
+  }
+  delete _empty;
+  _empty = nullptr;
 }
 
 PoComp TermPartialOrdering::getOneExternal(TermList t, size_t idx) const
