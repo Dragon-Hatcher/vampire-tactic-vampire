@@ -135,6 +135,15 @@ public:
    * to the object; otherwise return zero.
    */
   static SaturationAlgorithm* tryGetInstance() { return s_instance; }
+  /**
+   * Forget the current instance without destroying it.
+   *
+   * The inference replayer builds a saturation algorithm and never deletes it, so
+   * `s_instance` outlives the environment it was created in. Embedded in a host
+   * process that solves one problem after another, the next run then sees a pointer
+   * into torn-down state; `Lib::resetGlobalState` clears it through here.
+   */
+  static void forgetInstance() { s_instance = nullptr; }
   static void tryUpdateFinalClauseCount();
 
   Splitter* getSplitter() { return _splitter; }

@@ -6,6 +6,7 @@
 #include "Kernel/Clause.hpp"
 #include "Kernel/InferenceStore.hpp"
 #include "Kernel/Ordering.hpp"
+#include "Saturation/SaturationAlgorithm.hpp"
 #include "Kernel/Term.hpp"
 #include "Kernel/Unit.hpp"
 #include "Shell/InferenceRecorder.hpp"
@@ -19,6 +20,7 @@ void resetGlobalState()
   Kernel::InferenceStore::instance()->reset();
   Shell::InferenceRecorder::instance()->reset();
   Kernel::Ordering::unsetGlobalOrdering();
+  Saturation::SaturationAlgorithm::forgetInstance();
 
   Kernel::Unit::resetCounters();
   Kernel::Clause::resetAuxState();

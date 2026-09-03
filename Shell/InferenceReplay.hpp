@@ -18,19 +18,31 @@ class InferenceReplayer
 
     InferenceReplayer(std::ostream& output) : out(&output) {}
 
+    /**
+     * Tear the replay engine down.
+     *
+     * It used to be leaked, which is invisible in a one-shot process and fatal in a
+     * long-lived one: a `SaturationAlgorithm` registers itself and its indexes globally
+     * and only unregisters in its destructor, so the next problem solved in the same
+     * process saturated without finding a refutation it had found before.
+     */
+    ~InferenceReplayer() { delete alg; alg = nullptr; }
+
     void replayInference(Kernel::Unit* u);
 
     void makeInferenceEngine(Kernel::OrderingSP ord) {
         ASS(alg == nullptr);
         _ordering = ord;
-        Problem p;
         env.options->setSaturationAlgorithm(Shell::Options::SaturationAlgorithm::DISCOUNT);
         env.reconstruction = true;
-        alg = Saturation::SaturationAlgorithm::createFromOptions(p, *env.options);
-        alg->setOrdering(_ordering);   
+        // The problem is a member, not a local: the algorithm keeps a reference to it,
+        // so it has to outlive the algorithm rather than the call.
+        alg = Saturation::SaturationAlgorithm::createFromOptions(_problem, *env.options);
+        alg->setOrdering(_ordering);
     }
     
     private:
+    Kernel::Problem _problem;
     Kernel::OrderingSP _ordering;
     std::ostream* out = nullptr;
     Indexing::SaturationAlgorithm* alg = nullptr;
