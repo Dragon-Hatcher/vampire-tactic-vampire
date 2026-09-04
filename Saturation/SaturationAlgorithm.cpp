@@ -144,6 +144,19 @@ using namespace Saturation;
 
 SaturationAlgorithm* SaturationAlgorithm::s_instance = 0;
 
+/**
+ * The soft time limit, in deciseconds, to give every saturation algorithm created from
+ * here on; 0 for none.
+ *
+ * A standalone run is bounded by the thread `Timer::reinitialise` spawns, which calls
+ * std::_Exit when the limit is hit. That is fatal for an embedded Vampire, so
+ * `Timer::startClock` starts the clock without it and the cooperative check in
+ * `runImpl` is what has to stop the loop instead -- but nothing was setting the limit
+ * that check reads, so an embedded run was unbounded. The host sets this before the
+ * run; it is 0 by default, so the executable's own behaviour is unchanged.
+ */
+unsigned SaturationAlgorithm::s_embeddedSoftTimeLimit = 0;
+
 std::unique_ptr<PassiveClauseContainer> makeLevel0(bool isOutermost, const Options& opt, std::string name)
 {
   if (opt.weightRatio() == 0) {
@@ -297,6 +310,8 @@ SaturationAlgorithm::SaturationAlgorithm(Problem& prb, const Options& opt)
   }
 
   _partialRedundancyHandler.reset(PartialRedundancyHandler::create(opt, _ordering.ptr(), _splitter));
+
+  _softTimeLimit = s_embeddedSoftTimeLimit;
 
   s_instance = this;
 }

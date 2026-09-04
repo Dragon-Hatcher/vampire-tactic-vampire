@@ -154,6 +154,18 @@ public:
   // used by FMB's FunctionRelationshipInference
   void setSoftTimeLimit(unsigned deciseconds) { _softTimeLimit = deciseconds; }
 
+  /**
+   * The soft time limit every saturation algorithm created from here on is given.
+   *
+   * The executable is bounded by the thread `Timer::reinitialise` spawns, which calls
+   * std::_Exit when the limit is hit -- fatal for an embedded Vampire, so
+   * `Timer::startClock` starts the clock without it and the cooperative check in
+   * `runImpl` has to stop the loop instead. Nothing was setting the limit that check
+   * reads, so an embedded run was unbounded however small a limit it asked for. A host
+   * sets this before the run; 0, the default, leaves the executable unchanged.
+   */
+  static unsigned s_embeddedSoftTimeLimit;
+
 protected:
   void init() override;
   MainLoopResult runImpl() override;
