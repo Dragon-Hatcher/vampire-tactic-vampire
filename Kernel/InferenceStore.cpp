@@ -269,7 +269,6 @@ struct InferenceStore::ProofPrinter : public InferenceStore::AbstractProofPrinte
   ProofPrinter(std::ostream& out, InferenceStore* is)
   : AbstractProofPrinter(out,is)
   {
-    outputAxiomNames=env.options->outputAxiomNames();
   }
 
   virtual ~ProofPrinter() {}
@@ -342,7 +341,6 @@ protected:
     out << *cl << '\n';
   }
 
-  bool outputAxiomNames;
 
 private:
   struct CompareSATClauses {

@@ -319,6 +319,11 @@ SaturationAlgorithm::SaturationAlgorithm(Problem& prb, const Options& opt)
 /**
  * Destroy the SaturationAlgorithm object
  */
+void SaturationAlgorithm::setOrdering(OrderingSP ordering)
+{
+  _ordering = ordering;
+}
+
 SaturationAlgorithm::~SaturationAlgorithm()
 {
   ASS_EQ(s_instance,this);

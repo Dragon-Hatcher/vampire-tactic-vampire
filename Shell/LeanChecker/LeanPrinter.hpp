@@ -14,7 +14,7 @@
 #include "Saturation/Splitter.hpp"
 
 using namespace Kernel;
-using SortMap = DHMap<unsigned, TermList>;
+using SortMap = DHMap<unsigned, TermList, FnvHash, IdentityHash>;
 
 namespace Shell {
 namespace LeanPrinter {

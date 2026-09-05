@@ -119,7 +119,9 @@ public:
   std::shared_ptr<IndexType> tryGetGeneratingIndex() { return _imgr.tryGet<IndexType, true>(); }
 
   Ordering& getOrdering() const {  return *_ordering; }
-  void setOrdering(OrderingSP ordering) {  _ordering = ordering; }
+  /** Defined out of line: assigning a `SmartPtr` destroys what it held, and this header
+   * is reached from translation units where `Ordering` is only forward-declared. */
+  void setOrdering(OrderingSP ordering);
   LiteralSelector& getLiteralSelector() const { return *_selector; }
   const PartialRedundancyHandler& parRedHandler() const { return *_partialRedundancyHandler; }
   AlascaState& alascaState() { return *_alascaState; }

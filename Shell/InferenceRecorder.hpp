@@ -3,6 +3,7 @@
 
 #include "Forwards.hpp"
 
+#include "Indexing/DemodulationIndex.hpp"
 #include "Indexing/Index.hpp"
 #include "Kernel/Clause.hpp"
 #include "Kernel/Formula.hpp"

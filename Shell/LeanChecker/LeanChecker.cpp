@@ -860,9 +860,8 @@ void LeanChecker::predicateDefinitionIntroduction(std::ostream &out, SortMap &co
   out << indent << "-- step" << concl->number() << " " << concl->inference().name() << "\n";
   auto introducedFunctionSymbols = _is->getIntroducedSymbols(concl);
   ASS(introducedFunctionSymbols.size() == 1);
-  unsigned sym = introducedFunctionSymbols.top().second;
-  auto pred = env.signature->getPredicate(sym);
-  auto formula = _is->formulaReplacedByIntroducedSymbol(sym);
+  auto pred = introducedFunctionSymbols.top();
+  auto formula = _is->formulaReplacedByIntroducedSymbol(pred);
   ASS(!concl->isClause())
   out << indent << "let " << PredicateName(pred);
   VSList* fDomain;
@@ -900,7 +899,7 @@ void LeanChecker::functionDefinitionIntroduction(std::ostream &out, SortMap &con
   //auto [parent] = getParents<1>(concl);
   out << indent << "-- step" << concl->number() << " " << concl->inference().name() << "\n";
   auto introducedFunctionSymbols = _is->getIntroducedSymbols(concl);
-  auto fun = env.signature->getFunction(introducedFunctionSymbols.top().second);
+  auto fun = introducedFunctionSymbols.top();
   out << indent << "let " << FunctionName(fun) << " ";
   auto lit = concl->asClause()->literals()[0];
   SortMap variableMap;
@@ -1440,10 +1439,10 @@ void LeanChecker::skolemize(std::ostream &out, SortMap &conclSorts, Unit *concl)
 
   ASS(_is->hasIntroducedSymbols(concl))
   std::map<unsigned,Signature::Symbol*> replacedVarMap;
-  for(auto [_, symNum] : iterTraits(_is->getIntroducedSymbols(concl).iter())){
-    long replacedVar = _is->variableReplacedByIntroducedSymbol(symNum);
+  for(auto sym : iterTraits(_is->getIntroducedSymbols(concl).iter())){
+    long replacedVar = _is->variableReplacedByIntroducedSymbol(sym);
     ASS(replacedVar != -1)
-    replacedVarMap[replacedVar] = env.signature->getFunction(symNum);
+    replacedVarMap[replacedVar] = sym;
   }
   VariablePrenexOrderingTree tree;
   tree.buildTreeFromFormula(parent->getFormula(), Kernel::EXISTS);

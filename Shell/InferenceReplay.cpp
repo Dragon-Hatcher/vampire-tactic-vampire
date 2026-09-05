@@ -41,7 +41,7 @@ void InferenceReplayer::replayInference(Kernel::Unit *u)
       stack, u->asClause());
   }
   else if (u->inference().rule() == InferenceRule::SUPERPOSITION) {
-    Inferences::Superposition sp(*alg);
+    Inferences::Superposition<false> sp(*alg);
     runGenerating(&sp,
                          stack, u->asClause());
   }

@@ -112,7 +112,7 @@ void InferenceRecorder::forwardDemodulation(unsigned int id, Clause *conclusion,
     // we create a custom substitution to apply the substitution only to variables coming from the demodulator
     // otherwise the substitution we get faults
     info->substitutionForBanksSub.resize(1);
-    DHMap<unsigned int, TermList> sorts;
+    DHMap<unsigned int, TermList, FnvHash, IdentityHash> sorts;
     auto dataTerm = data->term;
     if (dataTerm.isVar()) {
       if (data->rhs.isTerm()) {
@@ -142,7 +142,7 @@ void InferenceRecorder::forwardDemodulation(unsigned int id, Clause *conclusion,
     //std::cout << variableSwapForClause << std::endl;
     //std::cout << variableMap << std::endl;
     for (const auto& [var, sort] : iterTraits(sorts.items())) {
-      auto newTerm = (*appl)(var);
+      auto newTerm = appl->apply(var);
       //std::cout << var << ": " << newTerm << std::endl;
       info->substitutionForBanksSub[0].bind(variableSwapForClause.apply(var).var(), 
         SubstHelper::apply(newTerm, substFixingNormalization));
@@ -161,7 +161,7 @@ void InferenceRecorder::backwardDemodulation(unsigned int id, Clause *conclusion
   // instantiates the first premise with the identity for this rule.
   recordGenericSubstitutionToOneBank<SubstApplicator>(id, conclusion, premises, appl, 
 	[](const SubstApplicator &subst, const TermList &term, size_t bank) {
-      return subst(term.var());
+      return subst.apply(term.var());
     },
     /* coveredPremise */ 1
   );
@@ -208,9 +208,9 @@ void InferenceRecorder::rectify(Formula* f, Formula* newFormula, VSList* vs, Sub
 
 bool InferenceRecorder::isSameAsProofStep(Clause *clause, Clause *goal, const std::vector<Clause *> &premises, std::unordered_map<unsigned int, unsigned int> &outVarMap)
 {
-  DHSet<unsigned int> clauseVars;
+  DHSet<unsigned int, FnvHash, IdentityHash> clauseVars;
   clause->collectVars(clauseVars);
-  DHSet<unsigned int> goalVars;
+  DHSet<unsigned int, FnvHash, IdentityHash> goalVars;
   goal->collectVars(goalVars);
   for(auto var : iterTraits(clauseVars.iterator())) {
     if (!goalVars.contains(var)) {

@@ -179,7 +179,7 @@ bool ForwardDemodulation<higherOrder>::perform(Clause* cl, Clause*& replacement,
         if(env.reconstruction){
           ASS(qr.data->clause->length()==1);
           ASS(qr.data->clause->literals()[0]->isEquality());
-          Shell::InferenceRecorder::instance()->forwardDemodulation(replacement->number(), replacement, {cl, qr.data->clause}, appl,qr.data, rhsS, trm);
+          Shell::InferenceRecorder::instance()->forwardDemodulation(replacement->number(), replacement, {cl, qr.data->clause}, subs, qr.data, rhsS, trm);
         }
         return true;
       }
@@ -216,22 +216,8 @@ ClauseIterator ForwardDemodulationReplay::generateClauses(Clause* premise)
       auto lit = arg.first.first;
       TypedTermList trm(arg.first.second);
       auto qr = arg.second;
-      auto lhs = qr.data->term;
-
-      RobSubstitution eqSortSubs;
-      if(lhs.isVar()){
-        if(!eqSortSubs.match(qr.data->term.sort(), 0, trm.sort(), 1)){
-          return nullptr;
-        }
-      }
-
       auto subs = qr.unifier;
-
-      ApplicatorWithEqSort applWithEqSort(subs.ptr(), eqSortSubs);
-      Applicator applWithoutEqSort(subs.ptr());
-      auto appl = lhs.isVar() ? (SubstApplicator*)&applWithEqSort : (SubstApplicator*)&applWithoutEqSort;
-
-      AppliedTerm rhsApplied(qr.data->rhs,appl,true);
+      AppliedTerm rhsApplied(qr.data->rhs, subs, true);
       if (ordering.compare(trm,rhsApplied) != Ordering::GREATER) {
         return nullptr;
       }
@@ -248,7 +234,7 @@ ClauseIterator ForwardDemodulationReplay::generateClauses(Clause* premise)
 
       auto replacement = Clause::fromStack(*resLits, SimplifyingInference2(InferenceRule::FORWARD_DEMODULATION, premise, qr.data->clause));
       if(env.reconstruction){
-        Shell::InferenceRecorder::instance()->forwardDemodulation(replacement->number(), replacement, {premise, qr.data->clause}, appl,qr.data, rhsS, trm);
+        Shell::InferenceRecorder::instance()->forwardDemodulation(replacement->number(), replacement, {premise, qr.data->clause}, subs, qr.data, rhsS, trm);
       }
       return replacement;
     })

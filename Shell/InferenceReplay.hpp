@@ -8,6 +8,8 @@
 #include "Saturation/SaturationAlgorithm.hpp"
 
 #include "Kernel/Unit.hpp"
+#include "Lib/Environment.hpp"
+#include "Shell/Options.hpp"
 
 #include <ostream>
 namespace Shell{

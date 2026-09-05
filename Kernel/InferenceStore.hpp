@@ -36,9 +36,6 @@ using namespace Lib;
 class InferenceStore {
 
 public:
-  typedef std::pair<SymbolType, unsigned> SymbolId;
-  typedef Stack<SymbolId> SymbolStack;
-
   static InferenceStore *instance();
   /** Drop everything recorded about the previous problem's proof. */
   void reset();

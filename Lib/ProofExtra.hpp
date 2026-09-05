@@ -55,9 +55,6 @@ public:
   void clear() { extras.reset(); }
 
   // remove the extra information for this unit
-  /** Drop all recorded extras (see Lib::resetGlobalState). */
-  void clear() { extras.reset(); }
-
   void remove(Kernel::Unit *unit) {
     extras.remove(unit);
   }
