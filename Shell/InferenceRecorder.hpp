@@ -135,14 +135,23 @@ private:
                                      const std::unordered_map<unsigned int, unsigned int> &varMap,
                                      const std::vector<Clause *> &premises,
                                      const T &recordedSubst,
-                                     std::function<TermList(const T &, const TermList &, size_t)> applyFunc)
+                                     std::function<TermList(const T &, const TermList &, size_t)> applyFunc,
+                                     int coveredPremise = -1)
   {
     // In case the variables are mapped differently, we adjust the term mapping to the original goal.
     Substitution variableSubst = buildVariableSubstitutionFromMap(varMap);
 
     substMap.resize(1);
     std::vector<unsigned> vars;
+    // `coveredPremise` is the premise whose variables the substitution is *about*, when
+    // it is about only one of them. Asking it about the others is not merely useless: an
+    // index's query substitution says "only bound values can be passed to this function"
+    // and enforces it with an `ALWAYS`, which a release build compiles into
+    // `__builtin_unreachable`. It goes unnoticed as long as the two premises number
+    // their variables alike, which they usually do, and segfaults in `derefQueryBinding`
+    // when the other premise has more of them.
     for (size_t bank = 0; bank < premises.size(); bank++) {
+      if (coveredPremise >= 0 && bank != static_cast<size_t>(coveredPremise)) continue;
       auto iter = premises[bank]->getVariableIterator();
       while (iter.hasNext()) {
         vars.push_back(variableSubst.apply(iter.next()).var());
@@ -242,10 +251,10 @@ private:
 
   template <typename T>
   /** Records a substitution-based inference where all variables are collapsed into one bank. */
-  void recordGenericSubstitutionToOneBank(unsigned int id, Kernel::Clause *conclusion, const std::vector<Kernel::Clause *> &premises, const T &recordedSubst, std::function<TermList(const T &, const TermList &, size_t)> applyFunc)
+  void recordGenericSubstitutionToOneBank(unsigned int id, Kernel::Clause *conclusion, const std::vector<Kernel::Clause *> &premises, const T &recordedSubst, std::function<TermList(const T &, const TermList &, size_t)> applyFunc, int coveredPremise = -1)
   {
     recordInferenceIfMatchingStep(id, conclusion, premises, [&](InferenceInformation &info, const std::unordered_map<unsigned int, unsigned int> &varMap) {
-      populateSubstitutionsMergeOneBank<T>(info.substitutionForBanksSub, varMap, premises, recordedSubst, applyFunc);
+      populateSubstitutionsMergeOneBank<T>(info.substitutionForBanksSub, varMap, premises, recordedSubst, applyFunc, coveredPremise);
     });
   }
 

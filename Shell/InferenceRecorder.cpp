@@ -155,10 +155,15 @@ void InferenceRecorder::forwardDemodulation(unsigned int id, Clause *conclusion,
 
 void InferenceRecorder::backwardDemodulation(unsigned int id, Clause *conclusion, const std::vector<Clause *> &premises, const SubstApplicator& appl)
 {
+  // Premise 1 only: `BackwardDemodulation` passes `{rewritten clause, equation}` and an
+  // applicator built from the index's *query* substitution, so the equation is the one
+  // whose variables it binds. It is also the only one the replay needs -- the Lean side
+  // instantiates the first premise with the identity for this rule.
   recordGenericSubstitutionToOneBank<SubstApplicator>(id, conclusion, premises, appl, 
 	[](const SubstApplicator &subst, const TermList &term, size_t bank) {
       return subst(term.var());
-    }
+    },
+    /* coveredPremise */ 1
   );
 }
 
