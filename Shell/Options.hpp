@@ -295,6 +295,7 @@ public:
   enum class ProofExtra : unsigned int {
     OFF,
     FREE,
+    LEAN,
     FULL
   };
   enum class FMBWidgetOrders : unsigned int {
@@ -455,7 +456,8 @@ public:
     SPIDER,
     SZS,
     VAMPIRE,
-    UCORE
+    UCORE,
+    LEAN,
   };
 
   /** Possible values for sat_solver */
@@ -572,6 +574,11 @@ public:
     OFF = 2
   };
 
+  enum class SkolemizationType : unsigned int {
+    STANDARD = 0,
+    SYNTACTIC = 1,
+  };
+
   enum class Proof : unsigned int {
     OFF = 0,
     ON = 1,
@@ -579,7 +586,8 @@ public:
     TPTP = 3,
     PROPERTY = 4,
     SMT2_PROOFCHECK = 5,
-    SMTCHECK = 6
+    SMTCHECK = 6,
+    LEANCHECK = 7
   };
 
   /** Values for --equality_proxy */
@@ -1959,6 +1967,7 @@ public:
   ProofExtra proofExtra() const { return _proofExtra.actualValue; }
   bool traceback() const { return _traceback.actualValue; }
   void setTraceback(bool traceback) { _traceback.actualValue = traceback; }
+  SkolemizationType skolemizationType() const { return _skolemizationType.actualValue; }
   std::string printProofToFile() const { return _printProofToFile.actualValue; }
   int naming() const { return _naming.actualValue; }
 
@@ -2289,6 +2298,7 @@ public:
   void setProof(Proof p) { _proof.actualValue = p; }
   bool newCNF() const { return _newCNF.actualValue; }
   bool getIteInlineLet() const { return _inlineLet.actualValue; }
+  bool purePredicateRemoval() const { return _purePredicateRemoval.actualValue; }
 
   bool useManualClauseSelection() const { return _manualClauseSelection.actualValue; }
   bool inequalityNormalization() const { return _inequalityNormalization.actualValue; }
@@ -2602,6 +2612,7 @@ private:
   BoolOptionValue _minimizeSatProofs;
   ChoiceOptionValue<ProofExtra> _proofExtra;
   BoolOptionValue _traceback;
+  ChoiceOptionValue<SkolemizationType> _skolemizationType;
 
   StringOptionValue _protectedPrefix;
 
@@ -2736,6 +2747,7 @@ private:
 
   BoolOptionValue _newCNF;
   BoolOptionValue _inlineLet;
+  BoolOptionValue _purePredicateRemoval;
 
   BoolOptionValue _manualClauseSelection;
   // arithmeitc reasoning options

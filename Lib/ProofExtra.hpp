@@ -51,6 +51,9 @@ public:
     ALWAYS(extras.insert(unit, std::unique_ptr<InferenceExtra>(extra)));
   }
 
+  /** Drop all recorded extras (see Lib::resetGlobalState). */
+  void clear() { extras.reset(); }
+
   // remove the extra information for this unit
   void remove(Kernel::Unit *unit) {
     extras.remove(unit);

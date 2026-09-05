@@ -13,12 +13,12 @@ set(TESTING_SOURCES
     Test/SyntaxSugar.cpp
     Test/SyntaxSugar.hpp
     Test/TermIndexTester.hpp
-    Test/TestUtils.cpp
-    Test/TestUtils.hpp
     Test/UnitTesting.cpp
     Test/UnitTesting.hpp
     Test/HOLUtils.cpp
     Test/HOLUtils.hpp
+    Test/TestUtils.cpp
+    Test/TestUtils.hpp
 )
 
 ################################################################
@@ -710,12 +710,22 @@ set(SOURCES
     Shell/GoalGuessing.hpp
     Shell/InequalitySplitting.cpp
     Shell/InequalitySplitting.hpp
+    Shell/InferenceRecorder.cpp
+    Shell/InferenceRecorder.hpp
+    Shell/InferenceReplay.cpp
+    Shell/InferenceReplay.hpp
     Shell/InterpolantMinimizer.cpp
     Shell/InterpolantMinimizer.hpp
     Shell/Interpolants.cpp
     Shell/Interpolants.hpp
     Shell/InterpretedNormalizer.cpp
     Shell/InterpretedNormalizer.hpp
+    Shell/LeanChecker/LeanChecker.cpp
+    Shell/LeanChecker/LeanChecker.hpp
+    Shell/LeanChecker/LeanPrinter.cpp
+    Shell/LeanChecker/LeanPrinter.hpp
+    Shell/LeanChecker/VariablePrenexOrderingTree.cpp
+    Shell/LeanChecker/VariablePrenexOrderingTree.hpp
     Shell/Lexer.cpp
     Shell/Lexer.hpp
     Shell/LispLexer.cpp

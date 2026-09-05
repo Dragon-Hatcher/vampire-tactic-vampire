@@ -34,6 +34,7 @@
 
 #include "Shell/Options.hpp"
 #include "Shell/Statistics.hpp"
+#include "Shell/InferenceRecorder.hpp"
 #include "Debug/TimeProfiling.hpp"
 
 #include "DemodulationHelper.hpp"
@@ -172,8 +173,14 @@ bool ForwardDemodulation<higherOrder>::perform(Clause* cl, Clause*& replacement,
 
         premises = pvi( getSingletonIterator(qr.data->clause));
         replacement = Clause::fromStack(*resLits, SimplifyingInference2(InferenceRule::FORWARD_DEMODULATION, cl, qr.data->clause));
-        if(env.options->proofExtra() == Options::ProofExtra::FULL)
+        if(env.options->proofExtra() == Options::ProofExtra::FULL) {
           env.proofExtra.insert(replacement, new ForwardDemodulationExtra(lhs, trm));
+        } 
+        if(env.reconstruction){
+          ASS(qr.data->clause->length()==1);
+          ASS(qr.data->clause->literals()[0]->isEquality());
+          Shell::InferenceRecorder::instance()->forwardDemodulation(replacement->number(), replacement, {cl, qr.data->clause}, appl,qr.data, rhsS, trm);
+        }
         return true;
       }
     }
@@ -184,5 +191,68 @@ bool ForwardDemodulation<higherOrder>::perform(Clause* cl, Clause*& replacement,
 
 template class ForwardDemodulation<true>;
 template class ForwardDemodulation<false>;
+
+ForwardDemodulationReplay::ForwardDemodulationReplay(SaturationAlgorithm& salg) : _preorderedOnly(salg.getOptions().forwardDemodulation()==Options::Demodulation::PREORDERED),
+    _encompassing(salg.getOptions().demodulationRedundancyCheck()==Options::DemodulationRedundancyCheck::ENCOMPASS),
+    _useTermOrderingDiagrams(salg.getOptions().forwardDemodulationTermOrderingDiagrams()),
+    _skipNonequationalLiterals(salg.getOptions().demodulationOnlyEquational()),
+    _helper(DemodulationHelper(salg.getOptions(), &salg.getOrdering())),
+    _ord(salg.getOrdering()),
+    _index(salg.getSimplifyingIndex<DemodulationLHSIndex<false>>())
+  {}
+
+ClauseIterator ForwardDemodulationReplay::generateClauses(Clause* premise)
+{
+  const auto& ordering = _ord;
+
+  return pvi(iterTraits(premise->iterLits())
+    .flatMap([](Literal* lit) {
+      return pushPairIntoRightIterator(lit, getUniquePersistentIterator(vi(new NonVariableNonTypeIterator(lit))));
+    })
+    .flatMap([this](const auto& arg) {
+      return pushPairIntoRightIterator(arg, iterTraits(_index->getGeneralizations(arg.second, /* retrieveSubstitutions */ true)));
+    })
+    .map([&ordering,premise](const auto& arg) -> Clause* {
+      auto lit = arg.first.first;
+      TypedTermList trm(arg.first.second);
+      auto qr = arg.second;
+      auto lhs = qr.data->term;
+
+      RobSubstitution eqSortSubs;
+      if(lhs.isVar()){
+        if(!eqSortSubs.match(qr.data->term.sort(), 0, trm.sort(), 1)){
+          return nullptr;
+        }
+      }
+
+      auto subs = qr.unifier;
+
+      ApplicatorWithEqSort applWithEqSort(subs.ptr(), eqSortSubs);
+      Applicator applWithoutEqSort(subs.ptr());
+      auto appl = lhs.isVar() ? (SubstApplicator*)&applWithEqSort : (SubstApplicator*)&applWithoutEqSort;
+
+      AppliedTerm rhsApplied(qr.data->rhs,appl,true);
+      if (ordering.compare(trm,rhsApplied) != Ordering::GREATER) {
+        return nullptr;
+      }
+
+      RStack<Literal*> resLits;
+      auto rhsS = rhsApplied.apply();
+      resLits->push(EqHelper::replace(lit,trm,rhsS));
+
+      for (const auto& curr : *premise) {
+        if(curr!=lit) {
+          resLits->push(curr);
+        }
+      }
+
+      auto replacement = Clause::fromStack(*resLits, SimplifyingInference2(InferenceRule::FORWARD_DEMODULATION, premise, qr.data->clause));
+      if(env.reconstruction){
+        Shell::InferenceRecorder::instance()->forwardDemodulation(replacement->number(), replacement, {premise, qr.data->clause}, appl,qr.data, rhsS, trm);
+      }
+      return replacement;
+    })
+    .filter(NonzeroFn()));
+}
 
 }

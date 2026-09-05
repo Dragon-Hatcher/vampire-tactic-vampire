@@ -12,7 +12,6 @@
  * Defines class InferenceStore.
  */
 
-
 #ifndef __InferenceStore__
 #define __InferenceStore__
 
@@ -26,35 +25,39 @@
 #include "Lib/Stack.hpp"
 
 #include "Kernel/Inference.hpp"
+#include "Kernel/Ordering.hpp"
 #include "Kernel/Signature.hpp"
 
+#include <set>
 namespace Kernel {
 
 using namespace Lib;
 
-class InferenceStore
-{
+class InferenceStore {
+
 public:
-  static InferenceStore* instance();
+  typedef std::pair<SymbolType, unsigned> SymbolId;
+  typedef Stack<SymbolId> SymbolStack;
+
+  static InferenceStore *instance();
 
   typedef List<int> IntList;
 
-  struct FullInference
-  {
-    FullInference(unsigned premCnt) : csId(0), premCnt(premCnt) { }
+  struct FullInference {
+    FullInference(unsigned premCnt) : csId(0), premCnt(premCnt) {}
 
-    void* operator new(size_t,unsigned premCnt)
+    void *operator new(size_t, unsigned premCnt)
     {
-      size_t size=sizeof(FullInference)+premCnt*sizeof(Unit*);
-      size-=sizeof(Unit*);
+      size_t size = sizeof(FullInference) + premCnt * sizeof(Unit *);
+      size -= sizeof(Unit *);
 
-      return ALLOC_KNOWN(size,"InferenceStore::FullInference");
+      return ALLOC_KNOWN(size, "InferenceStore::FullInference");
     }
 
     size_t occupiedBytes()
     {
-      size_t size=sizeof(FullInference)+premCnt*sizeof(Unit*);
-      size-=sizeof(Unit*);
+      size_t size = sizeof(FullInference) + premCnt * sizeof(Unit *);
+      size -= sizeof(Unit *);
       return size;
     }
 
@@ -63,18 +66,58 @@ public:
     int csId;
     unsigned premCnt;
     InferenceRule rule;
-    Unit* premises[1];
+    Unit *premises[1];
   };
+
+  /** The ordering the run that produced this proof used. A proof is read back after the
+   * saturation algorithm that found it has gone, and the replay needs the ordering it
+   * was found under. */
+  SmartPtr<Ordering> ordering;
 
   void recordSplittingNameLiteral(Unit* us, Literal* lit);
   void recordIntroducedSymbol(Unit* u, Signature::Symbol* sym);
+  void recordIntroducedSymbol(Unit* u, Signature::Symbol* sym, Formula* formula);
   void recordIntroducedSkolemSymbol(Unit* u, Signature::Symbol* sym, unsigned replacedVar, Term* symTerm);
   void recordIntroducedSplitName(Unit* u, std::string name);
-  
 
-  void outputUnsatCore(std::ostream& out, Unit* refutation);
-  void outputProof(std::ostream& out, Unit* refutation);
-  void outputProof(std::ostream& out, UnitList* units);
+  bool hasIntroducedSymbols(Unit* u);
+  Lib::Stack<Signature::Symbol*>& getIntroducedSymbols(Unit* u);
+  long variableReplacedByIntroducedSymbol(Signature::Symbol* sym);
+  Formula* formulaReplacedByIntroducedSymbol(Signature::Symbol* sym);
+
+  void outputUnsatCore(std::ostream &out, Unit *refutation);
+  void outputProof(std::ostream &out, Unit *refutation);
+  void outputProof(std::ostream &out, UnitList *units);
+
+  struct AbstractProofPrinter {
+  public:
+    AbstractProofPrinter(std::ostream &out, InferenceStore *is)
+        : _is(is), out(out) {}
+
+    struct CompareUnits {
+      bool operator()(Unit *l, Unit *r) const { return l->number() < r->number(); }
+    };
+
+    virtual void print()
+    {
+      for (Unit *u : proof) {
+        printStep(u);
+      }
+    }
+    // compute closure of `us`' ancestors for printing and insert into `proof`
+    void scheduleForPrinting(Unit *us);
+    virtual bool hideProofStep(InferenceRule rule){
+      return false;
+    }
+    virtual void printStep(Unit *u) = 0;
+    virtual ~AbstractProofPrinter() = default;
+
+  protected:
+    InferenceStore *_is;
+    std::ostream &out;
+    std::set<Unit *, CompareUnits> proof;
+  };
+
   struct ProofPrinter;
 
 private:
@@ -84,7 +127,7 @@ private:
   struct ProofPropertyPrinter;
   struct SMTCheckPrinter;
 
-  ProofPrinter* createProofPrinter(std::ostream& out);
+  AbstractProofPrinter *createProofPrinter(std::ostream &out);
 
   DHMultiset<unsigned, FnvHash, IdentityHash> _nextClIds;
 
@@ -98,9 +141,12 @@ private:
   // symbol id -> the term that is introduced when introducing the skolem symbol
   DHMap<Signature::Symbol*, Term*, FnvHash, PtrIdentityHash> _introducedSkolemSymTerms;
 
+  // symbol -> the formula a predicate definition introduced it for
+  DHMap<Signature::Symbol*, Formula*, FnvHash, PtrIdentityHash> _introducedSymbolFormulas;
+
   DHMap<unsigned,std::string, FnvHash, IdentityHash> _introducedSplitNames;
 };
 
-};
+}; // namespace Kernel
 
 #endif /* __InferenceStore__ */

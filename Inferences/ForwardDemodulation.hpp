@@ -47,6 +47,22 @@ protected:
   std::shared_ptr<DemodulationLHSIndex<higherOrder>> _index;
 };
 
+class ForwardDemodulationReplay
+: public GeneratingInferenceEngine
+{
+public:
+  ForwardDemodulationReplay(SaturationAlgorithm& salg);
+  ClauseIterator generateClauses(Clause* premise) override;
+protected:
+  const bool _preorderedOnly;
+  const bool _encompassing;
+  const bool _useTermOrderingDiagrams;
+  const bool _skipNonequationalLiterals;
+  const DemodulationHelper _helper;
+  const Ordering& _ord;
+  std::shared_ptr<DemodulationLHSIndex<false>> _index;
+};
+
 using ForwardDemodulationExtra = RewriteInferenceExtra;
 
 };

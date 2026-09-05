@@ -17,6 +17,7 @@
 #ifndef __Skolem__
 #define __Skolem__
 
+#include "Kernel/InductionTemplate.hpp"
 #include "Lib/DHMap.hpp"
 #include "Lib/Stack.hpp"
 
@@ -103,6 +104,8 @@ private:
   DHMap<unsigned,TermList, FnvHash, IdentityHash> _varSorts;
 
   // for some heuristic evaluations after we are done
+  // for using "simple" skolemization
+  Stack<unsigned> _universalScope;
   
   // (variable, new skolem term replacing the variable, new skolem functor)
   Stack<std::tuple<unsigned, Term*, unsigned>> _introducedSkolemSyms;

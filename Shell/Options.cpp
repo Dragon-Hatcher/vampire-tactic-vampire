@@ -22,6 +22,7 @@
 /* this translation unit causes the optimiser to take a very long time,
  * but it's not really performance-critical code:
  * disable optimisation for this file with various compilers */
+#include <iostream>
 #if defined(__clang__)
 #pragma clang optimize off
 #elif defined(__GNUC__)
@@ -319,7 +320,7 @@ void Options::init()
     _problemName.description="";
     //_lookup.insert(&_problemName);
 
-    _proof = ChoiceOptionValue<Proof>("proof","p",Proof::ON,{"off","on","proofcheck","tptp","property","smt2_proofcheck","smtcheck"});
+    _proof = ChoiceOptionValue<Proof>("proof","p",Proof::ON,{"off","on","proofcheck","tptp","property","smt2_proofcheck","smtcheck","leancheck"});
     _proof.description=
       "Specifies whether proof (or similar e.g. model/saturation) will be output and in which format:\n"
       "- off gives no proof output\n"
@@ -328,12 +329,23 @@ void Options::init()
       "- tptp gives TPTP output\n"
       "- property is a developmental option. It allows developers to output statistics about the proof using a ProofPrinter "
       "object (see Kernel/InferenceStore::ProofPropertyPrinter\n"
-      "- smtcheck produces a ground SMT script for proof checking\n";
+      "- smtcheck produces a ground SMT script for proof checking\n"
+      "- leancheck produces a LEAN script for proof checking\n";
     _lookup.insert(&_proof);
     _proof.tag(OptionTag::OUTPUT);
     _proof.addHardConstraint(If(equal(Proof::SMTCHECK)).then(_proofExtra.is(equal(ProofExtra::FULL))));
+    _proof.addHardConstraint(If(equal(Proof::LEANCHECK)).then(_proofExtra.is(equal(ProofExtra::LEAN))));
+    _proof.addHardConstraint(If(equal(Proof::LEANCHECK)).then( _shuffleInput.is(equal(false))));
+    _proof.addHardConstraint(If(equal(Proof::LEANCHECK)).then( _skolemizationType.is(equal(SkolemizationType::SYNTACTIC))));
+    _proof.addHardConstraint(If(equal(Proof::LEANCHECK)).then( _outputMode.is(equal(Output::LEAN))));
 
-    _minimizeSatProofs = BoolOptionValue("minimize_sat_proofs","msp",true);
+    _skolemizationType = ChoiceOptionValue<SkolemizationType>("skolemization","skt",SkolemizationType::STANDARD,{"standard","syntactic"});
+    _skolemizationType.description=
+      "The method used for skolemisation. The standard method produces the default vampire skolemization implementation, the syntactic method just uses all quantifiers before the subfomula. Note that the syntactic method may produce larger skolem terms.";
+    _lookup.insert(&_skolemizationType);
+    _skolemizationType.tag(OptionTag::PREPROCESSING);
+    
+      _minimizeSatProofs = BoolOptionValue("minimize_sat_proofs","msp",true);
     _minimizeSatProofs.description="Perform premise minimization when a sat solver finds a clause set UNSAT\n"
         "(such as with AVATAR proofs or with global subsumption).";
     _lookup.insert(&_minimizeSatProofs);
@@ -345,9 +357,10 @@ void Options::init()
     _lookup.insert(&_printProofToFile);
     _printProofToFile.tag(OptionTag::OUTPUT);
 
-    _proofExtra = ChoiceOptionValue<ProofExtra>("proof_extra","",ProofExtra::OFF,{"off","free","full"});
+    _proofExtra = ChoiceOptionValue<ProofExtra>("proof_extra","",ProofExtra::OFF,{"off","free", "lean","full"});
     _proofExtra.description="Add extra detail to proofs:\n "
       "- free uses known information only\n"
+      "- lean adds some extra information that cannot yet be reconstructed after the fact needed for leancheck\n"
       "- full may perform expensive operations to achieve this so may"
       " significantly impact on performance.\n"
       " The option is still under development and the format of extra information (mainly from full) may change between minor releases";
@@ -370,7 +383,7 @@ void Options::init()
     _lookup.insert(&_testId);
     _testId.setExperimental();
 
-    _outputMode = ChoiceOptionValue<Output>("output_mode","om",Output::SZS,{"smtcomp","spider","szs","vampire","ucore"});
+    _outputMode = ChoiceOptionValue<Output>("output_mode","om",Output::SZS,{"smtcomp","spider","szs","vampire","ucore", "lean"});
     _outputMode.description="Change how Vampire prints the final result. SZS uses TPTP's SZS ontology. smtcomp mode"
     " suppresses all output and just prints sat/unsat. vampire is the same as SZS just without the SZS."
     " Spider prints out some profile information and extra error reports. ucore uses the smt-lib ucore output.";
@@ -674,6 +687,12 @@ void Options::init()
     _newCNF.addProblemConstraint(hasFormulas());
     _newCNF.addProblemConstraint(onlyFirstOrder());
     _newCNF.tag(OptionTag::PREPROCESSING);
+
+    _purePredicateRemoval = BoolOptionValue("pure_predicate_removal","ppr",true);
+    _purePredicateRemoval.description="Remove pure predicates from formula";
+    _lookup.insert(&_purePredicateRemoval);
+    _purePredicateRemoval.tag(OptionTag::PREPROCESSING);
+    _purePredicateRemoval.addProblemConstraint(hasFormulas()); 
 
     _inlineLet = BoolOptionValue("inline_let","ile",true);
     _inlineLet.description="Always inline let-expressions.";
@@ -2828,12 +2847,14 @@ bool Options::OptionValue<T>::checkProblemConstraints(Property* prop){
 
          if (env.options->mode() == Mode::SPIDER){
            reportSpiderFail();
+           addCommentSignForSZS(std::cout);
            USER_ERROR("% WARNING: " + longName + con->msg());
          }
 
          switch(env.options->getBadOptionChoice()){
          case BadOption::OFF: break;
-         default:
+         default: 
+           addCommentSignForSZS(std::cout);
            cout << "% WARNING: " << longName << con->msg() << endl;
          }
          return false;

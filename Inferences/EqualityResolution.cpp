@@ -12,12 +12,14 @@
  * Implements class EqualityResolution.
  */
 
+
 #include "Lib/VirtualIterator.hpp"
 #include "Lib/Metaiterators.hpp"
 #include "Lib/Stack.hpp"
 
 #include "Lib/Environment.hpp"
 #include "Shell/Options.hpp"
+#include "Shell/InferenceRecorder.hpp"
 
 #include "Kernel/Clause.hpp"
 #include "Kernel/HOL/Unifier.hpp"
@@ -77,6 +79,9 @@ Clause* unifierToClause(Clause* cl, Literal* lit, AbstractingUnifier* unif, cons
   auto res = Clause::fromStack(*resLits, GeneratingInference1(InferenceRule::EQUALITY_RESOLUTION, cl));
   if(env.options->proofExtra() == Options::ProofExtra::FULL)
     env.proofExtra.insert(res, new EqualityResolutionExtra(lit));
+  if(env.reconstruction){
+    Shell::InferenceRecorder::instance()->equalityResolution(0, res, {cl}, unif->subs());
+  }
   return res;
 }
 

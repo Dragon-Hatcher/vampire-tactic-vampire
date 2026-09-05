@@ -249,7 +249,7 @@ void Shell::TweeGoalTransformation::apply(Problem &prb, bool groundOnly)
     if (df.premises) {
       UnitList::push(c,df.premises);
       Clause* nc = Clause::fromStack(newLits,
-        FormulaClauseTransformationMany(InferenceRule::DEFINITION_FOLDING,df.premises));
+        FormulaClauseTransformationMany(InferenceRule::DEFINITION_FOLDING_TWEE, df.premises));
       u = nc; // replace the original in the Problem's list
     }
   }

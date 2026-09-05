@@ -36,6 +36,8 @@
 #include "Rectify.hpp"
 #include "Skolem.hpp"
 
+#include <variant>
+
 using namespace std;
 using namespace Kernel;
 using namespace Shell;
@@ -81,6 +83,7 @@ FormulaUnit* Skolem::skolemiseImpl (FormulaUnit* unit, bool appify)
   _subst.reset();
   _varDeps.reset();
   _blockLookup.reset();
+  _universalScope.reset();
 
   Formula* f = unit->formula();
   preskolemise(f);
@@ -324,7 +327,18 @@ Formula* Skolem::skolemise (Formula* f)
 
   case FORALL:
     {
+      if(env.options->skolemizationType() == Options::SkolemizationType::SYNTACTIC){
+        for(auto [v, sort] : iterTraits(f->vars()->iter())){
+          _universalScope.push(v);
+        }
+      }
       Formula* g = skolemise(f->qarg());
+      if(env.options->skolemizationType() == Options::SkolemizationType::SYNTACTIC){
+        for(int x = 0; x < VSList::length(f->vars()); x++){
+          _universalScope.pop();
+        }
+      }
+
       // if we have something like
       // ![X : list(A)]: ...
       // then we may need to apply the substitution to A
@@ -391,9 +405,16 @@ Formula* Skolem::skolemise (Formula* f)
        * although perhaps only C occurs in "something", it's as if A occurred as well */
       depInfo.univ = dep;
 
-      auto vuIt = dep->iter();
-      while(vuIt.hasNext()) {
-        unsigned uvar = vuIt.next();
+      auto x = Stack<unsigned>::BottomFirstIterator(_universalScope);
+      using IterA = decltype(dep->iter());
+      using IterB = decltype(x);
+
+      std::variant<IterA, IterB> vuIt = (env.options->skolemizationType() == Options::SkolemizationType::SYNTACTIC)
+        ? std::variant<IterA, IterB>{x}
+        : std::variant<IterA, IterB>{dep->iter()};
+      
+      while(std::visit([](auto&& it) { return it.hasNext(); }, vuIt)) {
+        unsigned uvar = std::visit([](auto&& it) { return it.next(); }, vuIt);
         TermList sort = _varSorts.get(uvar, AtomicSort::defaultSort());
         if(sort == AtomicSort::superSort()){
           //This a type variable

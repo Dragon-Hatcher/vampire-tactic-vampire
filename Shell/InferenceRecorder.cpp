@@ -1,0 +1,282 @@
+#include "InferenceRecorder.hpp"
+
+#include "Forwards.hpp"
+#include "Indexing/Index.hpp"
+#include "Inferences/InferenceEngine.hpp"
+
+#include "Kernel/MLVariant.hpp"
+#include "Kernel/Matcher.hpp"
+#include "Kernel/SortHelper.hpp"
+#include "Kernel/SubstHelper.hpp"
+#include "Kernel/Substitution.hpp"
+#include "Indexing/ResultSubstitution.hpp"
+#include "Kernel/Term.hpp"
+#include "Lib/DHSet.hpp"
+#include "Lib/Metaiterators.hpp"
+#include "Shell/EqResWithDeletion.hpp"
+#include "Shell/Rectify.hpp"
+#include <cstddef>
+
+#include <unordered_map>
+#include <vector>
+#include <set>
+
+using namespace Kernel;
+using namespace Indexing;
+namespace Shell {
+
+InferenceRecorder *InferenceRecorder::_inst = nullptr;
+
+InferenceRecorder *InferenceRecorder::instance()
+{
+  static InferenceRecorder inst;
+  return &inst;
+}
+
+Substitution InferenceRecorder::buildVariableSubstitutionFromMap(const std::unordered_map<unsigned int, unsigned int> &varMap)
+{
+  Substitution variableSubst;
+  for (const auto &[var, mappedVar] : varMap) {
+    variableSubst.bind(var, TermList::var(mappedVar));
+  }
+  return variableSubst;
+}
+
+void InferenceRecorder::resolution(unsigned int id, Clause *conclusion, const std::vector<Clause *> &premises, const ResultSubstitutionSP &recordedSubst)
+{
+  recordGenericSubstitutionInference(id, conclusion, premises, recordedSubst);
+}
+
+void InferenceRecorder::superposition(unsigned int id, Clause *conclusion, const std::vector<Clause *> &premises, const ResultSubstitutionSP &recordedSubst, bool eqIsResult)
+{
+  recordGenericSubstitutionInference<ResultSubstitutionSP>(id, conclusion, premises, recordedSubst,
+                                                                     [eqIsResult](ResultSubstitutionSP subst, const TermList &term, size_t bank) {
+                                                                       if (bank == 1) {
+                                                                         return subst->apply(term, eqIsResult);
+                                                                       }
+                                                                       else {
+                                                                         return subst->apply(term, !eqIsResult);
+                                                                       }
+                                                                     });
+}
+
+void InferenceRecorder::factoring(unsigned int id, Clause *conclusion, const std::vector<Clause *> &premises, const RobSubstitution &recordedSubst)
+{
+  recordGenericSubstitutionInference(id, conclusion, premises, recordedSubst);
+}
+
+void InferenceRecorder::equalityResolution(unsigned int id, Clause *conclusion, const std::vector<Clause *> &premises, const RobSubstitution &recordedSubst)
+{
+  recordGenericSubstitutionInference(id, conclusion, premises, recordedSubst);
+}
+
+void InferenceRecorder::equalityFactoring(unsigned int id, Clause *conclusion, const std::vector<Clause *> &premises, const RobSubstitution &recordedSubst)
+{
+  recordGenericSubstitutionInference(id, conclusion, premises, recordedSubst);
+}
+
+void InferenceRecorder::equalityResolutionDeletion(unsigned int id, Clause *conclusion, Clause *premise, EqResWithDeletion *appl)
+{
+  recordGenericSubstitutionInference<EqResWithDeletion*>(id, conclusion, {premise}, appl,
+    [](EqResWithDeletion *subst, const TermList &term, size_t bank) {
+    return subst->apply(term.var());
+  });
+}
+
+void InferenceRecorder::forwardDemodulation(unsigned int id, Clause *conclusion, const std::vector<Clause *> &premises, const SubstApplicator *appl, const DemodulatorData *data,
+                                            TermList rhsS, TypedTermList trm)
+{
+  std::unordered_map<unsigned int, unsigned int> varMap;
+  if (isSameAsProofStep(conclusion, _currentGoal, premises, varMap)) {
+    std::unique_ptr<InferenceInformation> info = std::make_unique<InferenceInformation>();
+    Substitution variableMap = Substitution();
+    for (auto [var, mappedVar] : varMap) {
+      variableMap.bind(var, TermList::var(mappedVar));
+    }
+    info->conclusion = conclusion;
+    info->premises = premises;
+    info->substitutionForBanksSub.resize(1);
+    Substitution variableSwapForClauseR;
+
+    // qr.data->clause and qr.data->rhs have different variable namings since the demoldulation code normalizes the variables
+    // To handle this we check if the rhs is on either side of the equality and then create a
+    // variable permutation substitution to map the variables to the ones in the clause
+    auto x = Literal::createEquality(true, data->term, data->rhs, data->term.sort());
+    MLVariant::isVariant(&x, data->clause, false, &variableSwapForClauseR);
+
+    Substitution variableSwapForClause;
+    for(auto [var, term] : iterTraits(variableSwapForClauseR.items())){
+      variableSwapForClause.bind(term.var(), TermList::var(var));
+    }
+  
+    // we create a custom substitution to apply the substitution only to variables coming from the demodulator
+    // otherwise the substitution we get faults
+    info->substitutionForBanksSub.resize(1);
+    DHMap<unsigned int, TermList> sorts;
+    auto dataTerm = data->term;
+    if (dataTerm.isVar()) {
+      if (data->rhs.isTerm()) {
+        ALWAYS(sorts.insert(dataTerm.var(), SortHelper::getResultSort(data->rhs.term())));
+      } else {
+        ALWAYS(sorts.insert(dataTerm.var(), data->clause->literals()[0]->twoVarEqSort()));
+      }
+    } else {
+      auto term = dataTerm.term();
+      SortHelper::collectVariableSorts(term,sorts);
+    }
+
+    
+    Substitution substFixingNormalization;
+    auto foundTerm = SubstHelper::apply(data->term, *appl);
+    MatchingUtils::matchTerms(foundTerm, trm, substFixingNormalization);
+    //std::cout << data->rhs << std::endl;
+    //std::cout << data->term << std::endl;
+    //std::cout << premises[0]->toString() << std::endl;
+    //std::cout << premises[1]->toString() << std::endl;
+    //std::cout << data->clause->toString() << std::endl;
+    //std::cout << rhsS << std::endl;
+    //std::cout << data->clause->toString() << std::endl;
+    //std::cout << trm << std::endl;
+    //std::cout << foundTerm << std::endl;
+    //std::cout << substFixingNormalization << std::endl;
+    //std::cout << variableSwapForClause << std::endl;
+    //std::cout << variableMap << std::endl;
+    for (const auto& [var, sort] : iterTraits(sorts.items())) {
+      auto newTerm = (*appl)(var);
+      //std::cout << var << ": " << newTerm << std::endl;
+      info->substitutionForBanksSub[0].bind(variableSwapForClause.apply(var).var(), 
+        SubstHelper::apply(newTerm, substFixingNormalization));
+    }
+
+    _inferences[id] = std::move(info);
+    _lastInferenceId = id;
+  }
+}
+
+void InferenceRecorder::backwardDemodulation(unsigned int id, Clause *conclusion, const std::vector<Clause *> &premises, const SubstApplicator& appl)
+{
+  recordGenericSubstitutionToOneBank<SubstApplicator>(id, conclusion, premises, appl, 
+	[](const SubstApplicator &subst, const TermList &term, size_t bank) {
+      return subst(term.var());
+    }
+  );
+}
+
+void InferenceRecorder::rectify(Formula* f, Formula* newFormula, VSList* vs, Substitution renaming, std::set<unsigned> unusedVars)
+{
+  //When there are no remaining variables after rectification, we do not need a renaming.
+  if(vs == nullptr){
+    return;
+  }
+  Kernel::Substitution substVariablesInQuantifier;
+  auto quantifierIter = f->vars()->iter();
+  std::vector<unsigned> originalVars;
+  std::vector<unsigned> rectifiedVars;
+  while(quantifierIter.hasNext()) {
+    auto v = quantifierIter.next();
+    if(unusedVars.find(v.first) == unusedVars.end()){
+      originalVars.push_back(v.first);
+    }
+  }
+  auto argIter = vs->iter();
+  while(argIter.hasNext()) {
+    rectifiedVars.push_back(argIter.next().first);
+  }
+  
+  //ASS(originalVars.size() == rectifiedVars.size());
+  std::sort(originalVars.begin(), originalVars.end());
+  std::sort(rectifiedVars.begin(), rectifiedVars.end());
+  
+  for(size_t i = 0; i < originalVars.size(); i++) {
+    substVariablesInQuantifier.bind(rectifiedVars[i], TermList::var(originalVars[i]));
+  }
+  //std::cout << substVariablesInQuantifier << std::endl;
+  Substitution combinedSubst;
+  for(auto v : iterTraits(f->vars()->iter())) {
+    combinedSubst.bind(v.first, substVariablesInQuantifier.apply(renaming.apply(v.first).var()));
+  }
+  //std::cout << f->toString() << std::endl;
+  //std::cout << "Combined" << combinedSubst << std::endl;
+  static_cast<RectifyInferenceInformation*>(_currentRecording.get())->
+    renamings.emplace_back(newFormula, std::make_pair(f, combinedSubst));
+}
+
+bool InferenceRecorder::isSameAsProofStep(Clause *clause, Clause *goal, const std::vector<Clause *> &premises, std::unordered_map<unsigned int, unsigned int> &outVarMap)
+{
+  DHSet<unsigned int> clauseVars;
+  clause->collectVars(clauseVars);
+  DHSet<unsigned int> goalVars;
+  goal->collectVars(goalVars);
+  for(auto var : iterTraits(clauseVars.iterator())) {
+    if (!goalVars.contains(var)) {
+      return false;
+    }
+  }
+  auto parents = goal->getParents();
+  unsigned parentCounter = 0;
+  if(parents.hasNext()) {
+    auto parent = parents.next();
+    if(parent->number() != premises[parentCounter]->number()){
+      return false;
+    }
+    parentCounter++;
+  }
+
+  if (clause->length() != goal->length()) {
+    return false;
+  }
+  if (clause->length() == 0) {
+    return true;
+  }
+  
+  //For now it works
+  Clause *c = Clause::fromClause(clause);
+  Clause *g = Clause::fromClause(goal);
+
+  Inferences::DuplicateLiteralRemovalISE dlr;
+  c = dlr.simplify(c);
+  auto simpGoal = dlr.simplify(Clause::fromClause(g));
+
+  std::vector<LiteralList *> alts;
+  alts.clear();
+  alts.resize(c->length(), LiteralList::empty());
+
+  //This can probably be optimized with an index
+  for (unsigned bi = 0; bi < c->length(); ++bi) {
+    Literal *baseLit = (c->literals())[bi];
+    for (unsigned ii = 0; ii < simpGoal->length(); ++ii) {
+      Literal *instLit = (*simpGoal)[ii];
+      if (MatchingUtils::isVariant(const_cast<Literal *const>(baseLit), const_cast<Literal *const>(instLit), false)) {
+        LiteralList::push(instLit, alts[bi]);
+      }
+    }
+    if (LiteralList::isEmpty(alts[bi])) {
+      return false;
+    }
+  }
+  std::unordered_map<unsigned int, TermList> varToTermMap;
+  Substitution varMap;
+  if(c->length() != simpGoal->length()) {
+    return false;
+  }
+  bool isMLVariant = MLVariant::isVariant(c->literals(), simpGoal, alts.data(), &varMap);
+  if(!isMLVariant) {
+    return false;
+  }
+  for (auto [var, term] : iterTraits(varMap.items())) {
+    if (!term.isVar()) {
+      return false;
+    }
+    outVarMap[var] = term.var();
+  }
+  return true;
+}
+
+InferenceRecorder::InferenceRecorder()
+{
+}
+
+InferenceRecorder::~InferenceRecorder()
+{
+}
+} // namespace Shell

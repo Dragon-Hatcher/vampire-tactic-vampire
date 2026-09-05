@@ -41,10 +41,14 @@ void RewriteInferenceExtra::output(std::ostream &out) const {
   out << "lhs=" << lhs << ",target=" << rewritten;
 }
 
+void CNFTransformationInferenceExtra::output(std::ostream &out) const {
+  out << "number=" << number;
+}
+
 void TwoLiteralRewriteInferenceExtra::output(std::ostream &out) const {
   selected.output(out);
   out << ',';
   rewrite.output(out);
 }
-
-} // namespace Inferences
+ 
+}// namespace Inferences

@@ -325,12 +325,16 @@ void PredicateDefinition::collectReplacements(UnitList* units, ReplMap& replacem
       }
       eliminatePredicateDefinition(pred, replacements);
     }
-    while(_pureToReplace.isNonEmpty()) {
-      int pred=_pureToReplace.pop();
-      if(rpr && Random::getDouble(0.0,1.0) < RPR_SKIP_PROB) {
-        continue;
+    if(env.options->purePredicateRemoval()) {
+      while(_pureToReplace.isNonEmpty()) {
+        int pred=_pureToReplace.pop();
+        if(rpr && Random::getDouble(0.0,1.0) < RPR_SKIP_PROB) {
+          continue;
+        }
+        replacePurePred(pred, replacements);
       }
-      replacePurePred(pred, replacements);
+    } else {
+      _pureToReplace.reset();
     }
   }
   if (env.options->showPreprocessing()) {

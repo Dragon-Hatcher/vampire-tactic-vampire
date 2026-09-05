@@ -37,6 +37,7 @@
 
 #include "Shell/PartialRedundancyHandler.hpp"
 #include "Shell/Options.hpp"
+#include "Shell/InferenceRecorder.hpp"
 #include "Debug/TimeProfiling.hpp"
 
 #include "Superposition.hpp"
@@ -489,6 +490,10 @@ Clause* Superposition<higherOrder>::performSuperposition(
       eqLHS,
       rwTerm
     ));
+  } 
+  if(env.reconstruction){
+    Shell::InferenceRecorder* recorder = Shell::InferenceRecorder::instance();
+    recorder->superposition(clause->number(), clause, {rwClause, eqClause}, subst, eqIsResult);
   }
 
   return clause;

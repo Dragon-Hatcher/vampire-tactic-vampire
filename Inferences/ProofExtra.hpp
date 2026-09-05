@@ -18,6 +18,7 @@
 #ifndef __Inferences_ProofExtra__
 #define __Inferences_ProofExtra__
 
+
 #include "Kernel/Term.hpp"
 #include "Lib/ProofExtra.hpp"
 
@@ -68,6 +69,16 @@ struct RewriteInferenceExtra : public InferenceExtra {
   Kernel::TermList rewritten;
 };
 
+struct CNFTransformationInferenceExtra : public InferenceExtra {
+  CNFTransformationInferenceExtra(unsigned int number)
+    : number(number) {}
+
+  void output(std::ostream &out) const override;
+
+  // the rewrite information for the transformation
+  unsigned number;
+};
+
 struct TwoLiteralRewriteInferenceExtra : public InferenceExtra {
   TwoLiteralRewriteInferenceExtra(
     Kernel::Literal *selected,
@@ -85,6 +96,6 @@ struct TwoLiteralRewriteInferenceExtra : public InferenceExtra {
   // rewrite information
   RewriteInferenceExtra rewrite;
 };
-}
+} // namespace Inferences
 
 #endif
