@@ -182,7 +182,19 @@ void Clause::destroy()
   static Stack<Clause*> toDestroy(32);
   Clause* cl = this;
   for(;;) {
+    // LEAN belongs here beside FULL, and leaving it out is not a leak but a crash.
+    // Two sites insert under `FULL || LEAN` -- `CodeTreeForwardSubsumptionAndResolution
+    // ::perform` and `SplittingBranchSelector::handleSatRefutation` -- so under LEAN
+    // alone a destroyed clause's extra stayed in the map, keyed by the dead `Clause *`.
+    // The allocator then hands that address to a later clause, `ProofExtra::insert`
+    // finds the key present and `DHMap::insert` returns false, and the `ALWAYS` it is
+    // wrapped in is `if (!Cond) __builtin_unreachable();` once VDEBUG is off. Execution
+    // leaves the basic block into whatever the compiler laid down next -- for one build
+    // a cold `DHMap::expand` call entered with a garbage `this`, hence a SIGSEGV inside
+    // `expand()` with nothing in the backtrace to connect it to the clause that was
+    // freed, and only for problems where an address happens to be reused.
     if ((env.options->proofExtra() == Options::ProofExtra::FULL) ||
+        (env.options->proofExtra() == Options::ProofExtra::LEAN) ||
         (env.options->questionAnswering() == Options::QuestionAnsweringMode::SYNTHESIS)) {
       env.proofExtra.remove(cl);
     }

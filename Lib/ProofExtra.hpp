@@ -51,8 +51,21 @@ public:
     ALWAYS(extras.insert(unit, std::unique_ptr<InferenceExtra>(extra)));
   }
 
-  /** Drop all recorded extras (see Lib::resetGlobalState). */
-  void clear() { extras.reset(); }
+  /** Drop all recorded extras (see Lib::resetGlobalState).
+   *
+   * Not `extras.reset()`. `DHMap::reset` is the O(1) one: it bumps the map's timestamp
+   * so every entry reads as free and leaves the entries themselves untouched. For a map
+   * whose values own something that leaks every `InferenceExtra` still held, and it also
+   * leaves each entry's `Unit *` key pointing into the signature that `env.reset()` is
+   * about to delete -- so the map a second problem starts from is full of dangling keys
+   * that a later `expand()` would rehash.
+   *
+   * Moving an empty map in gives the old one to a temporary and destroys it, which is
+   * the point: `~DHMap` runs `array_delete` over the entries, so each held
+   * `InferenceExtra` is freed and no key outlives the signature it names. The cost is
+   * O(capacity) once per problem rather than O(1), which is the right trade here.
+   */
+  void clear() { extras = decltype(extras)(); }
 
   // remove the extra information for this unit
   void remove(Kernel::Unit *unit) {
