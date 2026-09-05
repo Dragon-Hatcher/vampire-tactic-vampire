@@ -23,6 +23,8 @@
 #include <cstddef>
 #include <new>
 
+#include <cstring>
+
 #include "Debug/Assertion.hpp"
 
 /*
@@ -260,6 +262,14 @@ inline void *alloc(size_t size) {
 // Deallocate a `pointer` to a memory chunk of known `size`, which must be a multiple of `align`.
 // Memory is returned to `GLOBAL_SMALL_OBJECT_ALLOCATOR`.
 inline void free(void *pointer, size_t size, size_t align) {
+#ifdef VAMPIRE_SCRIBBLE_FREE
+  // Debugging aid for embedded runs: fill a freed block with a pattern that is an
+  // invalid pointer and an implausible number, so that a stale reference read after the
+  // allocator has recycled the block faults at the read rather than several problems
+  // later. The pools are never returned to the OS, so nothing else makes a use-after-
+  // free visible here. Off unless the build asks for it.
+  memset(pointer, 0xDD, size);
+#endif
   GLOBAL_SMALL_OBJECT_ALLOCATOR.free(pointer, size, align);
 }
 
