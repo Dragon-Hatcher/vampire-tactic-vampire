@@ -1818,6 +1818,13 @@ void InferenceStore::reset()
   _introducedSymbolReplacedVars.reset();
   _introducedSymbolFormulas.reset();
   _introducedSplitNames.reset();
+  // The ordering too. A `KBO` holds precedences indexed by functor number and a `KBO`
+  // or `LPO` compares terms from the sharing table, so the run's ordering belongs to
+  // the run's signature; keeping it in the singleton hands it to the next problem, which
+  // has a different signature and different terms at the same numbers. Dropped here
+  // rather than in `Lib::resetGlobalState` because `reset` is what that calls, and
+  // because it must happen while the signature is still alive for the destructor.
+  ordering = SmartPtr<Ordering>();
 }
 
 InferenceStore* InferenceStore::instance()

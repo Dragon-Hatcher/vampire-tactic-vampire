@@ -142,6 +142,28 @@ public:
     return getFunctionTypeUniformRange(arity, AtomicSort::superSort(), AtomicSort::superSort());
   }
 
+  /**
+   * Drop every interned type, for an embedded Vampire between problems.
+   *
+   * The types are perfectly shared in a static set keyed by the argument sorts, and a
+   * sort is a term from the sharing table that `Environment::reset` deletes -- so after
+   * a reset every key in the set points into freed memory. That is not merely stale:
+   * the allocator hands the same memory back for the next problem's sorts, so a lookup
+   * can *match* a dead key and return a type whose argument sorts are whatever now
+   * occupies those addresses. `SortHelper::getArgSort` then reads a sort that is not a
+   * term, which is a segfault a few problems later and nowhere near the cause.
+   *
+   * Must be called with no live `Signature` holding pointers into the set -- i.e.
+   * between `delete signature` and the next `init()`, which is where
+   * `Environment::reset` calls it.
+   */
+  static void resetCache() {
+    // `deleteAll` frees the values and leaves the cells occupied, which is fine for the
+    // destructor it was written for and fatal here; `reset` empties them.
+    operatorTypes().deleteAll();
+    operatorTypes().reset();
+  }
+
   OperatorKey* key() const { return _key; }
   unsigned numTypeArguments() const { return _typeArgsArity; }
   unsigned arity() const { return _typeArgsArity + _key->length()-1; }

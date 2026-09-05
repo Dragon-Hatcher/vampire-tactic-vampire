@@ -17,6 +17,7 @@
 
 #include "Indexing/TermSharing.hpp"
 
+#include "Kernel/OperatorType.hpp"
 #include "Kernel/Signature.hpp"
 
 #include "Shell/Options.hpp"
@@ -87,6 +88,12 @@ void Environment::reset()
   reconstruction = false;
   _problem = nullptr;
   _higherOrder = false;
+
+  // After the signature is gone and before `init()` puts the built-in symbols back:
+  // the interned operator types are keyed by sorts from the term-sharing table that
+  // has just been deleted, and `init()` starts refilling them. See
+  // `OperatorType::resetCache`.
+  Kernel::OperatorType::resetCache();
 
   init();
 } // Environment::reset
