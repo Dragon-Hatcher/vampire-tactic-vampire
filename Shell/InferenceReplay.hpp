@@ -51,7 +51,8 @@ class InferenceReplayer
     void runBackwardsSimp(Inferences::BackwardSimplificationEngine* rule, ClauseStack& context, Clause* goal);
     void runForwardsSimp(Inferences::ForwardSimplificationEngine* rule, ClauseStack& context, Clause* goal);
     Clause* runGenerating(Inferences::GeneratingInferenceEngine* rule, ClauseStack& context, Clause* goal);
-    void removeAllActiveClauses();
+    void addToActive(const Kernel::ClauseStack& clauses, Kernel::ClauseStack& added);
+    void removeFromActive(const Kernel::ClauseStack& added);
 };
 }
 #endif /* __INFERENCE_REPLAY__ */
