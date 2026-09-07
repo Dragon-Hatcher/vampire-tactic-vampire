@@ -13,6 +13,7 @@
 #define __POLYNOMIAL_NORMALIZER_HPP__
 
 #include "Forwards.hpp"
+#include "Lib/Reset.hpp"
 
 #include "Term.hpp"
 #include "NumTraits.hpp"
@@ -77,6 +78,8 @@ template<class Arg, class Result>
 struct MemoNonVars 
 {
   Map<Arg, Result> _memo;
+  /** Which signature `_memo` was filled against; see `getOrInit`. */
+  unsigned _gen = 0;
 
 public:
   MemoNonVars() : _memo(decltype(_memo)()) {}
@@ -86,6 +89,14 @@ public:
 
   template<class Init> Result getOrInit(Arg const& orig, Init init)
   { 
+    // Dropped when the signature is replaced: the keys and values here are terms and
+    // polynomials over terms, so an entry cached under an earlier signature hands back a
+    // `TermList` into a sharing table `Lib::resetGlobalState` has freed. The instances
+    // are function-local statics, so each checks the generation for itself.
+    if (_gen != Lib::signatureGeneration()) {
+      _memo.reset();
+      _gen = Lib::signatureGeneration();
+    }
     return isVar(orig) 
       ? init()
       : _memo.getOrInit(Arg(orig), init);

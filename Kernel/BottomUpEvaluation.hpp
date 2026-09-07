@@ -24,6 +24,7 @@
  */
 
 #include "Lib/Stack.hpp"
+#include "Lib/Reset.hpp"
 #include "Lib/Recycled.hpp"
 #include "Lib/Option.hpp"
 #include "Lib/TypeList.hpp"
@@ -52,15 +53,36 @@ namespace Memo {
   class Hashed
   {
     Map<Arg, Result, Hash> _memo;
+    /** Which signature `_memo` was filled against; see `freshen`. */
+    unsigned _gen = 0;
+
+    /** Drop the memo when the signature has been replaced.
+     *
+     * The keys and values here are `PolyNf`s and terms, so an entry cached under an
+     * earlier signature hands back a term from a sharing table that
+     * `Lib::resetGlobalState` has freed. This memo is a *member*, and the one that
+     * matters is the one on the `PolynomialEvaluation` inside
+     * `InequalityNormalizer::global()` -- a process-wide singleton. So an ALASCA strategy
+     * would fill it, and the next strategy in the schedule would be handed the previous
+     * run's polynomials. The symptom was not a crash: `canc=force` ran for over a minute
+     * embedded on a problem the binary finishes in 0.018s, and only ever when it ran
+     * *after* an ALASCA strategy. */
+    void freshen()
+    {
+      if (_gen != Lib::signatureGeneration()) {
+        _memo.reset();
+        _gen = Lib::signatureGeneration();
+      }
+    }
 
   public:
     Hashed() : _memo(decltype(_memo)()) {}
 
     template<class Init> Result getOrInit(Arg const& orig, Init init)
-    { return _memo.getOrInit(Arg(orig), init); }
+    { freshen(); return _memo.getOrInit(Arg(orig), init); }
 
     Option<Result> get(const Arg& orig)
-    { return _memo.tryGet(orig).toOwned(); }
+    { freshen(); return _memo.tryGet(orig).toOwned(); }
   };
 
 } // namespace Memo

@@ -15,6 +15,9 @@
 
 namespace Lib {
 
+/// Counts from 1, so that a cache initialised against 0 misses on its first use.
+static unsigned g_signatureGeneration = 1;
+
 void resetGlobalState()
 {
   // Order matters: drop the things that point into the signature before the signature
@@ -49,6 +52,12 @@ void resetGlobalState()
   // Rebuilds options, signature, term sharing and statistics, and re-registers the
   // built-in sorts in the order the rest of the code depends on.
   env.reset();
+
+  // Last, so that a cache refilled during `env.reset()` is still counted as belonging
+  // to the signature that reset produced.
+  g_signatureGeneration++;
 }
+
+unsigned signatureGeneration() { return g_signatureGeneration; }
 
 } // namespace Lib

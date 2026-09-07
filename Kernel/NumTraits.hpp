@@ -11,6 +11,7 @@
 #define __NUM_TRAITS_H__
 
 #include "Forwards.hpp"
+#include "Lib/Reset.hpp"
 #include "Term.hpp"
 #include "Theory.hpp"
 #include "Signature.hpp"
@@ -99,7 +100,17 @@ struct NumTraits;
     static constexpr Theory::Interpretation name ## I = Theory::SORT_SHORT ## _INTERPRETATION;      \
                                                                                           \
     static unsigned name ## F() {                                                         \
-      static const unsigned functor = env.signature->getInterpretingSymbol(name ## I);    \
+      /* Refilled when the signature is replaced: a functor number belongs to one      */ \
+      /* signature, and embedded Vampire (`Lib::resetGlobalState`) builds a new one per */ \
+      /* run. Held in a plain function-local static this returned the previous run's    */ \
+      /* number for the rest of the process, and ALASCA then built terms whose functor  */ \
+      /* indexed past the end of `Signature::_funs`.                                    */ \
+      static unsigned gen = 0;                                                            \
+      static unsigned functor = 0;                                                        \
+      if (gen != Lib::signatureGeneration()) {                                            \
+        functor = env.signature->getInterpretingSymbol(name ## I);                        \
+        gen = Lib::signatureGeneration();                                                 \
+      }                                                                                   \
       return functor;                                                                     \
     }                                                                                     \
 
@@ -160,11 +171,23 @@ struct NumTraits;
       return ConstantType(value);                                                         \
     }                                                                                     \
     static Term* name ## T() {                                                            \
-      static Term* trm = theory->representConstant(name ## C());                          \
+      /* Same as above, and worse: this is a pointer into the term-sharing table, which */ \
+      /* the reset frees.                                                               */ \
+      static unsigned gen = 0;                                                            \
+      static Term* trm = nullptr;                                                         \
+      if (gen != Lib::signatureGeneration()) {                                            \
+        trm = theory->representConstant(name ## C());                                     \
+        gen = Lib::signatureGeneration();                                                 \
+      }                                                                                   \
       return trm;                                                                         \
     }                                                                                     \
     static unsigned name ## F() {                                                         \
-      static unsigned f = name ## T()->functor();                                         \
+      static unsigned gen = 0;                                                            \
+      static unsigned f = 0;                                                              \
+      if (gen != Lib::signatureGeneration()) {                                            \
+        f = name ## T()->functor();                                                       \
+        gen = Lib::signatureGeneration();                                                 \
+      }                                                                                   \
       return f;                                                                           \
     }                                                                                     \
     static TermList name()                                                                \

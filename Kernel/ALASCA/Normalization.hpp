@@ -12,6 +12,7 @@
 #define __ALASCA_Normalization__
 
 #include "Kernel/Term.hpp"
+#include "Lib/Reset.hpp"
 #include "Kernel/ALASCA/Signature.hpp"
 #include "Kernel/Polynomial.hpp"
 #include "Kernel/TermIterators.hpp"
@@ -158,7 +159,17 @@ namespace Kernel {
 
   public:
     static const InequalityNormalizer& global() {
-      // TODO get rid of this global state
+      // One instance for the process, as upstream has it.
+      //
+      // It used to be rebuilt per signature, on the theory that its `PolynomialEvaluation
+      // _eval` memoised by term. It does not: the memo is a function-local static inside
+      // `PolynomialEvaluation::evaluate`, shared by every instance, and that one is
+      // dropped by generation in `MemoNonVars::getOrInit`. So rebuilding this object
+      // cleared nothing -- and because callers (`LAKBO`, `AlascaState`) hold
+      // `const InequalityNormalizer&` captured at construction, the old one had to be
+      // leaked rather than freed. One leak per `Lib::resetGlobalState`, and an embedded
+      // run resets once per strategy: `p08_UFLRA` reached 7.8GB in the prover, before
+      // any replay, on a problem the binary refutes in 0.03s and 13MB.
       static InequalityNormalizer globalNormalizer;
       return globalNormalizer;
     }

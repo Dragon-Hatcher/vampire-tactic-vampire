@@ -31,6 +31,21 @@ namespace Lib {
  */
 void resetGlobalState();
 
+/**
+ * How many times the signature has been replaced, counting from 1.
+ *
+ * For caches that hold a functor number or a shared term and cannot be reached from
+ * `resetGlobalState` to be cleared -- the ones generated per numeric sort by the macros
+ * in `Kernel/NumTraits.hpp`, which are function-local statics inside template members
+ * and so have no single place to reset from. A cache records the generation it was
+ * filled in and refills itself when it no longer matches, which is self-healing and
+ * needs no registry.
+ *
+ * `resetGlobalState` bumps it. A cache that compares against 0 therefore always misses
+ * on its first use.
+ */
+unsigned signatureGeneration();
+
 } // namespace Lib
 
 #endif // __Reset__

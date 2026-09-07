@@ -12,6 +12,7 @@
 #define __ALASCA_Signature__
 
 #include "Kernel/NumTraits.hpp"
+#include "Lib/Reset.hpp"
 #include "Kernel/SortHelper.hpp"
 #include "Kernel/Signature.hpp"
 
@@ -66,6 +67,7 @@ inline std::ostream& operator<<(std::ostream& out, AlascaPredicate const& self)
 template<class NumTraits> 
 struct AlascaSignature : public NumTraits {
   using Numeral = typename NumTraits::ConstantType;
+  static unsigned cacheGen;
   static Option<Numeral> oneN;
   static Option<TermList> oneT;
   static Option<TermList> sortT;
@@ -77,6 +79,7 @@ struct AlascaSignature : public NumTraits {
     return NumTraits::tryNumeral(t);
 #else 
     if (t == AlascaSignature::one()) {
+      freshenCache();
       return Option<Numeral const&>(oneN.unwrapOrInit([&]() { return NumTraits::constant(1); }));
     } else {
       return NumTraits::ifLinMul(t, [](auto& c, auto t) {
@@ -153,9 +156,25 @@ struct AlascaSignature : public NumTraits {
   template<class... Args> static TermList mulF(Args...)  = delete;
   template<class... Args> static TermList tryMul(Args...)  = delete;
 
-  static TermList const& zero() { return zeroT.unwrapOrInit([&]() { return AlascaSignature::numeralTl(0); }); }
-  static TermList const& one() { return oneT.unwrapOrInit([&]() { return NumTraits::one(); }); }
-  static TermList const& sort() { return sortT.unwrapOrInit([&]() { return NumTraits::sort(); }); }
+  /** Drop the cached terms if they belong to a signature that has been replaced.
+   *
+   * `zeroT`, `oneT` and `sortT` hold `TermList`s into the term-sharing table, filled
+   * once per process. Embedded Vampire rebuilds the signature per run
+   * (`Lib::resetGlobalState`), so `ALASCA::Normalization` was building literals out of
+   * the *previous* run's zero -- which then went into a `SubstitutionTree` and killed
+   * `TermList::sameTop` on the next lookup. */
+  static void freshenCache() {
+    if (cacheGen != Lib::signatureGeneration()) {
+      oneN = Option<Numeral>();
+      oneT = Option<TermList>();
+      sortT = Option<TermList>();
+      zeroT = Option<TermList>();
+      cacheGen = Lib::signatureGeneration();
+    }
+  }
+  static TermList const& zero() { freshenCache(); return zeroT.unwrapOrInit([&]() { return AlascaSignature::numeralTl(0); }); }
+  static TermList const& one() { freshenCache(); return oneT.unwrapOrInit([&]() { return NumTraits::one(); }); }
+  static TermList const& sort() { freshenCache(); return sortT.unwrapOrInit([&]() { return NumTraits::sort(); }); }
 
   static bool isZero(TermList t) { return AlascaSignature::zero() == t; }
 
@@ -213,6 +232,7 @@ template<class NumTraits>
 AlascaSignature<NumTraits> asig(NumTraits n) 
 { return AlascaSignature<NumTraits> {}; }
 
+template<typename NumTraits> unsigned AlascaSignature<NumTraits>::cacheGen = 0;
 template<typename NumTraits> Option<typename AlascaSignature<NumTraits>::Numeral> AlascaSignature<NumTraits>::oneN;
 template<typename NumTraits> Option<TermList> AlascaSignature<NumTraits>::oneT;
 template<typename NumTraits> Option<TermList> AlascaSignature<NumTraits>::sortT;
