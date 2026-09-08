@@ -1221,12 +1221,21 @@ void SaturationAlgorithm::activate(Clause* cl)
 /**
  * Perform the loop that puts clauses from the unprocessed to the passive container.
  */
+void SaturationAlgorithm::checkSoftTimeLimit()
+{
+  if (_softTimeLimit &&
+      Timer::elapsedDeciseconds() - _softTimeLimitStart > _softTimeLimit)
+    throw TimeLimitExceededException();
+}
+
 void SaturationAlgorithm::doUnprocessedLoop()
 {
   do {
     newClausesToUnprocessed();
 
     while (!_unprocessed->isEmpty()) {
+      // Not only once per activation: this loop is unbounded on its own.
+      checkSoftTimeLimit();
       Clause* c = _unprocessed->pop();
       poppedFromUnprocessed(c); // tells LRS's it might make sense to update limits
 
@@ -1360,7 +1369,7 @@ void SaturationAlgorithm::doOneAlgorithmStep()
 MainLoopResult SaturationAlgorithm::runImpl()
 {
   // could be more precise, but we don't care too much
-  unsigned startTime = Timer::elapsedDeciseconds();
+  _softTimeLimitStart = Timer::elapsedDeciseconds();
   try {
     env.statistics->activations = 0;
     while (true) {
@@ -1369,8 +1378,7 @@ MainLoopResult SaturationAlgorithm::runImpl()
       if (_activationLimit && env.statistics->activations >= _activationLimit) {
         throw ActivationLimitExceededException();
       }
-      if(_softTimeLimit && Timer::elapsedDeciseconds() - startTime > _softTimeLimit)
-        throw TimeLimitExceededException();
+      checkSoftTimeLimit();
     }
   }
   catch (ThrowableBase&) {

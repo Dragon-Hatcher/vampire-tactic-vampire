@@ -286,6 +286,25 @@ private:
 
   // a "soft" time limit in deciseconds, checked manually: 0 is no limit
   unsigned _softTimeLimit = 0;
+  /** When the soft time limit started counting, in deciseconds. Set by `runImpl`. */
+  unsigned _softTimeLimitStart = 0;
+  /**
+   * Throw `TimeLimitExceededException` if the embedded soft time limit has passed.
+   *
+   * The limit used to be tested once per activation, at the top of `runImpl`. That is
+   * not often enough: `doUnprocessedLoop` can process unboundedly many clauses inside a
+   * single algorithm step, so a step that is slow in itself never reaches the test. A
+   * slice given one decisecond ran for over 170s that way, in `Cancellation` normalising
+   * real-arithmetic literals through GMP rationals.
+   *
+   * The executable does not notice, because there the limit is enforced by the timer
+   * thread, which `_Exit`s the process from outside the loop. An embedded Vampire has no
+   * such thread -- it cannot exit the host -- so a cooperative test is all there is, and
+   * it has to be somewhere the loop actually reaches.
+   *
+   * Free when the limit is unset, which is every run of the executable.
+   */
+  void checkSoftTimeLimit();
 };
 
 
