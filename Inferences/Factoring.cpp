@@ -21,7 +21,10 @@
 #include "Kernel/Clause.hpp"
 #include "Kernel/Inference.hpp"
 #include "Kernel/LiteralSelector.hpp"
+#include "Kernel/InferenceStore.hpp"
 #include "Kernel/RobSubstitution.hpp"
+#include "Lib/DHSet.hpp"
+#include "Lib/Metaiterators.hpp"
 #include "Kernel/Ordering.hpp"
 
 #include "Saturation/SaturationAlgorithm.hpp"
@@ -101,6 +104,25 @@ public:
     Clause *cl = Clause::fromStack(*resLits, GeneratingInference1(InferenceRule::FACTORING,_cl));
     if(env.options->proofExtra() == Options::ProofExtra::FULL)
       env.proofExtra.insert(cl, new FactoringExtra(l1, l2));
+    // The unifier that makes the two literals one, which the clause does not
+    // keep; the literal dropped is the second of them.
+    {
+      Stack<std::pair<unsigned, TermList>> bindings;
+      DHSet<unsigned, FnvHash, IdentityHash> vars;
+      _cl->collectVars(vars);
+      for (unsigned v : iterTraits(vars.iterator())) {
+        bindings.push({v, subst.apply(TermList(v, false), 0)});
+      }
+      unsigned literal = InferenceStore::literalNone;
+      for (unsigned i = 0; i < _cl->length(); i++) {
+        if ((*_cl)[i] == skipped) {
+          literal = i;
+          break;
+        }
+      }
+      InferenceStore::instance()->recordPremiseUse(cl, _cl, literal,
+        TermList::empty(), 0, bindings);
+    }
     return cl;
   }
 private:
