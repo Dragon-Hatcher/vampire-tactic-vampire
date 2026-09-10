@@ -18,6 +18,10 @@
 
 #include "Saturation/SaturationAlgorithm.hpp"
 
+#include "Kernel/InferenceStore.hpp"
+#include "Kernel/Matcher.hpp"
+#include "Kernel/Substitution.hpp"
+#include "Kernel/SubstHelper.hpp"
 #include "ForwardLiteralRewriting.hpp"
 
 namespace Inferences
@@ -89,6 +93,26 @@ bool ForwardLiteralRewriting::perform(Clause* cl, Clause*& replacement, ClauseIt
 
       premises = pvi( getSingletonIterator(premise));
       replacement = Clause::fromStack(*resLits, SimplifyingInference2(InferenceRule::FORWARD_LITERAL_REWRITING, cl, premise));
+      // The premise is one half of an equivalence, and rewriting with it is
+      // resolving against it: its other literal is what goes into the
+      // conclusion. Which of its literals was resolved on, and at what match,
+      // is recovered here -- the halves are variants of one another, so the
+      // literal the index gave need not be one of this premise's.
+      for (unsigned i = 0; i < premise->length(); i++) {
+        Substitution s;
+        if (!MatchingUtils::match((*premise)[i], lit, /*complementary=*/true, s)) {
+          continue;
+        }
+        Literal* other = (*premise)[premise->length() - 1 - i];
+        if (SubstHelper::apply(other, s) != rhsS) {
+          continue;
+        }
+        InferenceStore::instance()->recordPremiseUse(replacement, cl, lit,
+          TermList::empty(), 0, Substitution());
+        InferenceStore::instance()->recordPremiseUse(replacement, premise,
+          (*premise)[i], TermList::empty(), 0, s);
+        break;
+      }
       return true;
     }
   }

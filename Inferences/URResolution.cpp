@@ -17,6 +17,11 @@
 #include "Lib/VirtualIterator.hpp"
 
 #include "Kernel/Clause.hpp"
+#include "Lib/DHSet.hpp"
+#include "Kernel/TermIterators.hpp"
+#include "Kernel/SubstHelper.hpp"
+#include "Kernel/Substitution.hpp"
+#include "Kernel/InferenceStore.hpp"
 #include "Kernel/ColorHelper.hpp"
 #include "Kernel/Renaming.hpp"
 #include "Kernel/Inference.hpp"
@@ -50,6 +55,35 @@ URResolution<synthesis>::URResolution(SaturationAlgorithm& salg)
   ASS_NEQ(salg.getOptions().unitResultingResolution(),  Options::URResolution::OFF);
 }
 
+/**
+ * Composes @b s with what @b u does to the bank @b bank.
+ *
+ * The unifiers a unit resulting resolution uses come one at a time and are
+ * applied to the literals as they come; nothing keeps what they did to each
+ * premise's variables, which is what replaying the step needs.
+ */
+static void composeInto(Substitution& s, ResultSubstitution* u, bool bank)
+{
+  Stack<std::pair<unsigned, TermList>> items;
+  for (auto item : iterTraits(s.items())) {
+    items.push(item);
+  }
+  for (auto [v, t] : items) {
+    s.rebind(v, u->apply(t, bank));
+  }
+}
+
+/** Makes @b s the identity on @b cl's variables, to compose as unifiers come. */
+static void identityOn(Substitution& s, Clause* cl)
+{
+  s.reset();
+  DHSet<unsigned, FnvHash, IdentityHash> vars;
+  cl->collectVars(vars);
+  for (unsigned v : iterTraits(vars.iterator())) {
+    s.bindUnbound(v, TermList(v, false));
+  }
+}
+
 template<bool synthesis>
 struct URResolution<synthesis>::Item
 {
@@ -72,6 +106,8 @@ struct URResolution<synthesis>::Item
       }
     }
     _atMostOneNonGround = nonGroundCnt<=1;
+    identityOn(_origSubst, cl);
+    _premiseSubsts.ensure(litslen);
 
     _activeLength = selectedOnly ? cl->numSelected() : litslen;
     ASS_REP2(_activeLength>=litslen-1, cl->toString(), cl->numSelected());
@@ -89,6 +125,18 @@ struct URResolution<synthesis>::Item
     Literal* rlit = _lits[idx];
     _lits[idx] = 0;
     _premises[idx] = premise;
+    // What this unifier does to the premise it resolves with, and to everything
+    // already collected.
+    {
+      composeInto(_origSubst, unif.unifier.ptr(), !useQuerySubstitution);
+      for (unsigned i = 0; i < _premiseSubsts.size(); i++) {
+        if (_premises[i] && i != idx) {
+          composeInto(_premiseSubsts[i], unif.unifier.ptr(), !useQuerySubstitution);
+        }
+      }
+      identityOn(_premiseSubsts[idx], premise);
+      composeInto(_premiseSubsts[idx], unif.unifier.ptr(), useQuerySubstitution);
+    }
     _color = static_cast<Color>(_color | premise->color());
     ASS_NEQ(_color, COLOR_INVALID)
 
@@ -155,14 +203,57 @@ struct URResolution<synthesis>::Item
     Clause* res;
 
     LiteralIterator it = _ansLit ? pvi(getSingletonIterator(_ansLit)) : LiteralIterator::getEmpty();
+    // The literal that survives is stated with its variables normalised, so
+    // what the premises were bound to is normalised the same way.
+    Renaming norm;
     if(single) {
       if (!_ansLit || _ansLit->ground()) {
-        single = Renaming::normalize(single);
+        norm.normalizeVariables(single);
+        single = norm.apply(single);
       }
       res = Clause::fromIterator(concatIters(getSingletonIterator(single), std::move(it)), inf);
     }
     else {
       res = Clause::fromIterator(std::move(it), inf);
+    }
+
+    // A variable the surviving literal does not mention is not in the
+    // conclusion at all, so it can stand for anything as long as both the
+    // clause and the premise resolved with it say the same.
+    auto normalised = [&norm](Substitution& s) {
+      Substitution renaming;
+      Stack<std::pair<unsigned, TermList>> items;
+      for (auto item : iterTraits(s.items())) {
+        items.push(item);
+      }
+      for (auto [v0, t] : items) {
+        VariableIterator vit(t);
+        while (vit.hasNext()) {
+          unsigned v = vit.next().var();
+          TermList bound;
+          if (!renaming.findBinding(v, bound) && norm.contains(v)) {
+            renaming.bindUnbound(v, TermList(norm.get(v), false));
+          }
+        }
+      }
+      Stack<std::pair<unsigned, TermList>> out;
+      for (auto [v, t] : items) {
+        out.push({v, SubstHelper::apply(t, renaming)});
+      }
+      return out;
+    };
+    // In the order the premises are stated: the clause, then the units, each
+    // against the literal of the clause it resolved away.
+    InferenceStore::instance()->recordPremiseUse(res, _orig,
+      InferenceStore::literalNone, TermList::empty(), 0,
+      normalised(const_cast<Item*>(this)->_origSubst));
+    for (unsigned i = _premiseSubsts.size(); i-- > 0; ) {
+      if (!_premises[i]) {
+        continue;
+      }
+      InferenceStore::instance()->recordPremiseUse(res, _premises[i], i,
+        TermList::empty(), 0,
+        normalised(const_cast<Item*>(this)->_premiseSubsts[i]));
     }
     return res;
   }
@@ -217,6 +308,12 @@ struct URResolution<synthesis>::Item
 
   /** Premises used to resolve away particular literals */
   DArray<Clause*> _premises;
+  /**
+   * What each premise's variables have been bound to, composed as the unifiers
+   * came, and normalised as the conclusion is: what replaying the step needs.
+   */
+  Substitution _origSubst;
+  DArray<Substitution> _premiseSubsts;
 
   /** Unresolved literals, or zeroes at positions of the resolved ones
    *
