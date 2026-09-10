@@ -67,6 +67,19 @@ public:
     Unit* premises[1];
   };
 
+  /**
+   * The number of the first unit polarity flipping made, or zero if it never
+   * ran.
+   *
+   * Flipping replaces every clause of the problem over the predicates it picks
+   * by their complements, which says nothing about the clauses: it says that
+   * those predicates now mean the opposite of what they did. So the proof
+   * divides in two at this number, the halves disagreeing over what those
+   * predicates mean, and anything reading it has to know where the line is.
+   */
+  void recordPolarityFlipBoundary(unsigned number) { _polarityFlipBoundary = number; }
+  unsigned polarityFlipBoundary() const { return _polarityFlipBoundary; }
+
   void recordSplittingNameLiteral(Unit* us, Literal* lit);
   void recordIntroducedSymbol(Unit* u, Signature::Symbol* sym);
   void recordIntroducedSkolemSymbol(Unit* u, Signature::Symbol* sym, unsigned replacedVar, Term* symTerm);
@@ -162,6 +175,8 @@ public:
   struct ProofPrinter;
 
 private:
+  unsigned _polarityFlipBoundary = 0;
+
   struct TPTPProofPrinter;
   struct Smt2ProofCheckPrinter;
   struct ProofCheckPrinter;
