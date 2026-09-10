@@ -22,6 +22,7 @@
 #include "Lib/ScopedLet.hpp"
 
 #include "Kernel/Clause.hpp"
+#include "Kernel/InferenceStore.hpp"
 #include "Kernel/Formula.hpp"
 #include "Kernel/Inference.hpp"
 #include "Kernel/FormulaUnit.hpp"
@@ -725,16 +726,25 @@ Clause* FunctionDefinition::applyDefinitions(Clause* cl)
 
   UnitList* premises=0;
   std::vector<Term *> extra;
+  // Which side of each definition is the symbol it defines: either can be, and
+  // the equation alone does not say.
+  Stack<std::pair<Unit*, Term*>> defined;
   while(usedDefs.isNonEmpty()) {
     Def *def = usedDefs.pop();
     Clause* defCl=def->defCl;
     UnitList::push(defCl, premises);
+    defined.push({defCl, def->lhs});
     if(env.options->proofExtra() == Options::ProofExtra::FULL)
       extra.push_back(def->lhs);
   }
   std::reverse(extra.begin(), extra.end());
   UnitList::push(cl, premises);
   auto res = Clause::fromStack(*resLits, NonspecificInferenceMany(InferenceRule::DEFINITION_UNFOLDING, premises));
+  for (auto [defCl, lhs] : defined) {
+    InferenceStore::instance()->recordPremiseUse(res, defCl,
+      InferenceStore::literalNone, TermList(lhs), 0,
+      Stack<std::pair<unsigned, TermList>>());
+  }
   if(env.options->proofExtra() == Options::ProofExtra::FULL)
     env.proofExtra.insert(res, new FunctionDefinitionExtra(std::move(extra)));
   res->setAge(cl->age()); // TODO isn't this dones automatically?
