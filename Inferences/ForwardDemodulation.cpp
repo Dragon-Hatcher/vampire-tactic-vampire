@@ -21,6 +21,8 @@
 
 #include "Kernel/Clause.hpp"
 #include "Kernel/EqHelper.hpp"
+#include "Kernel/InferenceStore.hpp"
+#include "Kernel/Substitution.hpp"
 #include "Kernel/Inference.hpp"
 #include "Kernel/Ordering.hpp"
 #include "Kernel/Term.hpp"
@@ -174,6 +176,21 @@ bool ForwardDemodulation<higherOrder>::perform(Clause* cl, Clause*& replacement,
         replacement = Clause::fromStack(*resLits, SimplifyingInference2(InferenceRule::FORWARD_DEMODULATION, cl, qr.data->clause));
         if(env.options->proofExtra() == Options::ProofExtra::FULL)
           env.proofExtra.insert(replacement, new ForwardDemodulationExtra(lhs, trm));
+        // Which subterm of which literal was rewritten, by which side of the
+        // demodulator and at what match: none of it survives the inference, and
+        // working out afterwards which way a demodulator was used is guesswork.
+        {
+          Substitution subst;
+          DHSet<unsigned, FnvHash, IdentityHash> vars;
+          qr.data->clause->collectVars(vars);
+          for (unsigned v : iterTraits(vars.iterator())) {
+            subst.bindUnbound(v, subs.apply(v));
+          }
+          InferenceStore::instance()->recordPremiseUse(replacement, cl, lit,
+            trm, Substitution());
+          InferenceStore::instance()->recordPremiseUse(replacement,
+            qr.data->clause, (*qr.data->clause)[0], lhs, subst);
+        }
         return true;
       }
     }

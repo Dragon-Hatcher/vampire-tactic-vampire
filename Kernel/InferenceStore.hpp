@@ -87,13 +87,21 @@ public:
     unsigned premise;
     /** Index of the literal acted on, or `literalNone` if none was. */
     unsigned literal;
+    /**
+     * The term the inference acted on within that literal, empty if none.
+     *
+     * A rewriting inference singles out a term rather than a whole literal:
+     * the subterm being rewritten in the premise it rewrites, and the side of
+     * the equation doing the rewriting in the premise it comes from.
+     */
+    TermList term;
     Stack<std::pair<unsigned, TermList>> bindings;
   };
 
   static const unsigned literalNone = UINT_MAX;
 
   void recordPremiseUse(Unit* generated, Unit* premise, unsigned literal,
-    const Stack<std::pair<unsigned, TermList>>& bindings);
+    TermList term, const Stack<std::pair<unsigned, TermList>>& bindings);
 
   /**
    * The same, for an inference that already holds the substitution it applied
@@ -102,7 +110,7 @@ public:
    * as themselves.
    */
   void recordPremiseUse(Unit* generated, Clause* premise, Literal* on,
-    const Substitution& subst);
+    TermList term, const Substitution& subst);
 
   /** How @b u used each of its premises, empty when nothing was recorded. */
   const Stack<PremiseUse>* premiseUses(Unit* u) const;

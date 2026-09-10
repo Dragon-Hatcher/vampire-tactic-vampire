@@ -104,15 +104,16 @@ void InferenceStore::recordIntroducedSkolemSymbol(Unit* u, Signature::Symbol* sy
 }
 
 void InferenceStore::recordPremiseUse(Unit* generated, Unit* premise,
-  unsigned literal, const Stack<std::pair<unsigned, TermList>>& bindings)
+  unsigned literal, TermList term,
+  const Stack<std::pair<unsigned, TermList>>& bindings)
 {
   Stack<PremiseUse>* uses;
   _premiseUses.getValuePtr(generated->number(), uses);
-  uses->push({premise->number(), literal, bindings});
+  uses->push({premise->number(), literal, term, bindings});
 }
 
 void InferenceStore::recordPremiseUse(Unit* generated, Clause* premise,
-  Literal* on, const Substitution& subst)
+  Literal* on, TermList term, const Substitution& subst)
 {
   Stack<std::pair<unsigned, TermList>> bindings;
   DHSet<unsigned, FnvHash, IdentityHash> vars;
@@ -129,7 +130,7 @@ void InferenceStore::recordPremiseUse(Unit* generated, Clause* premise,
       }
     }
   }
-  recordPremiseUse(generated, premise, literal, bindings);
+  recordPremiseUse(generated, premise, literal, term, bindings);
 }
 
 void InferenceStore::recoverSubsumptionResolutionUses(Unit* u)
@@ -183,8 +184,8 @@ void InferenceStore::recoverSubsumptionResolutionUses(Unit* u)
   Substitution subst = satSR.getBindingsForSubsumptionResolutionWithLiteral();
   // Only the side premise is instantiated: the conclusion is the main premise
   // itself, less one literal, so it keeps its variables.
-  recordPremiseUse(u, main, removed, Substitution());
-  recordPremiseUse(u, side, nullptr, subst);
+  recordPremiseUse(u, main, removed, TermList::empty(), Substitution());
+  recordPremiseUse(u, side, nullptr, TermList::empty(), subst);
 }
 
 const Stack<InferenceStore::PremiseUse>* InferenceStore::premiseUses(Unit* u) const
