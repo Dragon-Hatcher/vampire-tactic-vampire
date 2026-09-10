@@ -44,6 +44,8 @@
 #include "InferenceStore.hpp"
 #include "Term.hpp"
 #include "TermIterators.hpp"
+#include "SATSubsumption/SATSubsumptionAndResolution.hpp"
+#include "Substitution.hpp"
 #include "Theory.hpp"
 #include "Unit.hpp"
 
@@ -107,6 +109,82 @@ void InferenceStore::recordPremiseUse(Unit* generated, Unit* premise,
   Stack<PremiseUse>* uses;
   _premiseUses.getValuePtr(generated->number(), uses);
   uses->push({premise->number(), literal, bindings});
+}
+
+void InferenceStore::recordPremiseUse(Unit* generated, Clause* premise,
+  Literal* on, const Substitution& subst)
+{
+  Stack<std::pair<unsigned, TermList>> bindings;
+  DHSet<unsigned, FnvHash, IdentityHash> vars;
+  premise->collectVars(vars);
+  for (unsigned v : iterTraits(vars.iterator())) {
+    bindings.push({v, subst.apply(v)});
+  }
+  unsigned literal = literalNone;
+  if (on) {
+    for (unsigned i = 0; i < premise->length(); i++) {
+      if ((*premise)[i] == on) {
+        literal = i;
+        break;
+      }
+    }
+  }
+  recordPremiseUse(generated, premise, literal, bindings);
+}
+
+void InferenceStore::recoverSubsumptionResolutionUses(Unit* u)
+{
+  if (premiseUses(u) || !u->isClause()) {
+    return;
+  }
+  Clause* conclusion = u->asClause();
+  Inference& inference = u->inference();
+  Inference::Iterator it = inference.iterator();
+  if (!inference.hasNext(it)) {
+    return;
+  }
+  Unit* first = inference.next(it);
+  if (!inference.hasNext(it)) {
+    return;
+  }
+  Unit* second = inference.next(it);
+  if (inference.hasNext(it) || !first->isClause() || !second->isClause()) {
+    return;
+  }
+  Clause* main = first->asClause();
+  Clause* side = second->asClause();
+
+  Literal* removed = nullptr;
+  for (unsigned i = 0; i < main->length(); i++) {
+    Literal* literal = (*main)[i];
+    bool kept = false;
+    for (unsigned j = 0; j < conclusion->length(); j++) {
+      if ((*conclusion)[j] == literal) {
+        kept = true;
+        break;
+      }
+    }
+    if (!kept) {
+      if (removed) {
+        return;
+      }
+      removed = literal;
+    }
+  }
+  if (!removed) {
+    return;
+  }
+
+  SATSubsumption::SATSubsumptionAndResolution satSR;
+  if (!satSR.checkSubsumptionResolutionWithLiteral(side, main,
+        main->getLiteralPosition(removed))) {
+    return;
+  }
+  Substitution subst = satSR.getBindingsForSubsumptionResolutionWithLiteral();
+  // Only the side premise is instantiated: the conclusion is the main premise
+  // itself, less one literal, so it keeps its variables.
+  recordPremiseUse(u, main, removed, Substitution());
+  recordPremiseUse(u, side, nullptr, subst);
 }
 
 const Stack<InferenceStore::PremiseUse>* InferenceStore::premiseUses(Unit* u) const

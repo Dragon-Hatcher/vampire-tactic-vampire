@@ -977,8 +977,13 @@ bool SATSubsumption::SATSubsumptionAndResolution::checkSubsumptionResolutionWith
 
 Substitution SATSubsumption::SATSubsumptionAndResolution::getBindingsForSubsumptionResolutionWithLiteral()
 {
-  Substitution subst;
   _solver.get_model(_model);
+  return bindingsFromModel();
+}
+
+Substitution SATSubsumption::SATSubsumptionAndResolution::bindingsFromModel()
+{
+  Substitution subst;
   for(auto lit : _model) {
     if(lit.is_negative())
       continue;

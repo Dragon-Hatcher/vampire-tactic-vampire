@@ -518,6 +518,13 @@ public:
   Kernel::Substitution getBindingsForSubsumptionResolutionWithLiteral();
 
   /**
+   * @brief The substitution the matches in the current model stand for.
+   * @note precondition: @b _model holds a model of the subsumption resolution
+   * problem, i.e. the solver has just answered SAT and the model been read.
+   */
+  Kernel::Substitution bindingsFromModel();
+
+  /**
    * Creates a clause that is the subsumption resolution of @b mainPremise and @b sidePremise on @b m_j.
    * L V L' /\ M* V @b m_j => L V L' /\ M*
    *

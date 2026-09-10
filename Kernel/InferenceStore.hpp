@@ -23,6 +23,7 @@
 #include "Lib/Allocator.hpp"
 #include "Lib/DHMap.hpp"
 #include "Lib/DHMultiset.hpp"
+#include "Lib/DHSet.hpp"
 #include "Lib/Stack.hpp"
 
 #include "Kernel/Inference.hpp"
@@ -94,8 +95,34 @@ public:
   void recordPremiseUse(Unit* generated, Unit* premise, unsigned literal,
     const Stack<std::pair<unsigned, TermList>>& bindings);
 
+  /**
+   * The same, for an inference that already holds the substitution it applied
+   * to @b premise as a `Substitution`: @b on is the literal acted on, or null
+   * if none was, and every variable of @b premise is recorded, unbound ones
+   * as themselves.
+   */
+  void recordPremiseUse(Unit* generated, Clause* premise, Literal* on,
+    const Substitution& subst);
+
   /** How @b u used each of its premises, empty when nothing was recorded. */
   const Stack<PremiseUse>* premiseUses(Unit* u) const;
+
+  /**
+   * Works out how a subsumption resolution step used its premises, and records
+   * it, unless something is already recorded.
+   *
+   * Subsumption resolution drops the one literal of its main premise that the
+   * side premise resolves away, so which literal that was is the difference
+   * between the main premise and the conclusion. Given the literal, the SAT
+   * problem the inference solved is solved again, and its model read as the
+   * substitution -- which is cheap here, where only the steps of a proof are
+   * looked at, and would not be during the search.
+   *
+   * Does nothing if the step does not have that shape, or if the problem comes
+   * back unsatisfiable: the rule is also what a subsumption demodulation
+   * records itself under, and that is not a subsumption resolution.
+   */
+  void recoverSubsumptionResolutionUses(Unit* u);
 
   /**
    * The skolem symbols @b u introduced, each paired with the existential
