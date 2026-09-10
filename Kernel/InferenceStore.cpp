@@ -101,6 +101,19 @@ void InferenceStore::recordIntroducedSkolemSymbol(Unit* u, Signature::Symbol* sy
   pStack->emplace(sym);
 }
 
+void InferenceStore::recordPremiseUse(Unit* generated, Unit* premise,
+  unsigned literal, const Stack<std::pair<unsigned, TermList>>& bindings)
+{
+  Stack<PremiseUse>* uses;
+  _premiseUses.getValuePtr(generated->number(), uses);
+  uses->push({premise->number(), literal, bindings});
+}
+
+const Stack<InferenceStore::PremiseUse>* InferenceStore::premiseUses(Unit* u) const
+{
+  return _premiseUses.findPtr(u->number());
+}
+
 void InferenceStore::introducedSkolems(Unit* u,
   Stack<std::tuple<Signature::Symbol*, unsigned, Term*>>& out) const
 {

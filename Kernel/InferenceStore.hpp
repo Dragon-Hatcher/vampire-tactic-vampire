@@ -72,6 +72,32 @@ public:
   void recordIntroducedSplitName(Unit* u, std::string name);
 
   /**
+   * How a generated clause used one of its premises: which of the premise's
+   * literals the inference acted on, and what the unifier bound each of the
+   * premise's variables to.
+   *
+   * A generating inference applies a substitution that it computes by
+   * unification and then discards, so a proof records the premises but not
+   * what was done to them. Anything replaying the step would have to find the
+   * substitution again by matching the conclusion against the premises; this
+   * records it instead.
+   */
+  struct PremiseUse {
+    unsigned premise;
+    /** Index of the literal acted on, or `literalNone` if none was. */
+    unsigned literal;
+    Stack<std::pair<unsigned, TermList>> bindings;
+  };
+
+  static const unsigned literalNone = UINT_MAX;
+
+  void recordPremiseUse(Unit* generated, Unit* premise, unsigned literal,
+    const Stack<std::pair<unsigned, TermList>>& bindings);
+
+  /** How @b u used each of its premises, empty when nothing was recorded. */
+  const Stack<PremiseUse>* premiseUses(Unit* u) const;
+
+  /**
    * The skolem symbols @b u introduced, each paired with the existential
    * variable it replaced and the term it was replaced by.
    *
@@ -112,6 +138,9 @@ private:
   DHMap<Signature::Symbol*, Term*, FnvHash, PtrIdentityHash> _introducedSkolemSymTerms;
 
   DHMap<unsigned,std::string, FnvHash, IdentityHash> _introducedSplitNames;
+
+  // generated unit id -> how it used each premise
+  DHMap<unsigned,Stack<PremiseUse>, FnvHash, IdentityHash> _premiseUses;
 };
 
 };
