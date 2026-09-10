@@ -22,6 +22,10 @@
 #include "Kernel/Term.hpp"
 #include "Kernel/FormulaVarIterator.hpp"
 
+#include "Kernel/InferenceStore.hpp"
+#include "Kernel/Substitution.hpp"
+#include "Lib/DHSet.hpp"
+#include "Lib/Metaiterators.hpp"
 #include "Shell/AnswerLiteralManager.hpp"
 
 #include "EqResWithDeletion.hpp"
@@ -82,10 +86,12 @@ start_applying:
 
   bool foundResolvable=false;
   std::unordered_set<Literal *> resolved;
+  Literal* resolvedLit=nullptr;
   for(unsigned i=0;i<clen;i++) {
     Literal* lit=(*cl)[i];
     if(!foundResolvable && scan(lit)) {
       foundResolvable=true;
+      resolvedLit=lit;
       if(env.options->proofExtra() == Options::ProofExtra::FULL)
         resolved.insert(lit);
     } else {
@@ -100,10 +106,24 @@ start_applying:
     (*resLits)[i] = SubstHelper::apply((*resLits)[i], *this);
   }
 
-  cl = Clause::fromStack(*resLits,
-      SimplifyingInference1(InferenceRule::EQUALITY_RESOLUTION_WITH_DELETION, cl));
-  if(env.options->proofExtra() == Options::ProofExtra::FULL)
-    env.proofExtra.insert(cl, new EqResWithDeletionExtra(std::move(resolved)));
+  {
+    Clause* premise = cl;
+    cl = Clause::fromStack(*resLits,
+        SimplifyingInference1(InferenceRule::EQUALITY_RESOLUTION_WITH_DELETION, premise));
+    if(env.options->proofExtra() == Options::ProofExtra::FULL)
+      env.proofExtra.insert(cl, new EqResWithDeletionExtra(std::move(resolved)));
+    // Which inequality was resolved away, and the binding that resolved it:
+    // the conclusion is the rest of the premise at that binding, so neither is
+    // recoverable from it.
+    Substitution subst;
+    DHSet<unsigned, FnvHash, IdentityHash> vars;
+    premise->collectVars(vars);
+    for (unsigned v : iterTraits(vars.iterator())) {
+      subst.bindUnbound(v, apply(v));
+    }
+    InferenceStore::instance()->recordPremiseUse(cl, premise, resolvedLit,
+      TermList::empty(), 0, subst);
+  }
   goto start_applying;
 }
 
