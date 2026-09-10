@@ -28,6 +28,7 @@
 #include "Lib/SharedSet.hpp"
 
 #include "Shell/Flattening.hpp"
+#include "Kernel/InferenceStore.hpp"
 #include "Shell/Skolem.hpp"
 #include "Shell/Options.hpp"
 #include "Shell/Rectify.hpp"
@@ -1001,6 +1002,11 @@ Term* NewCNF::createSkolemTerm(unsigned var, VarSet* free)
       sym->markInductionSkolem();
     }
     res = Term::create(fun, arity, args.begin());
+    // Clausifying here does the skolemisation itself, so unlike Shell/Skolem
+    // there is no separate step to carry the record. Attribute it to the
+    // formula being clausified, the one premise the resulting clauses share.
+    InferenceStore::instance()->recordIntroducedSkolemSymbol(
+      _beingClausified, sym, var, res);
   }
 
   sym->markSkipCongruence();
