@@ -70,6 +70,19 @@ public:
   void recordIntroducedSymbol(Unit* u, Signature::Symbol* sym);
   void recordIntroducedSkolemSymbol(Unit* u, Signature::Symbol* sym, unsigned replacedVar, Term* symTerm);
   void recordIntroducedSplitName(Unit* u, std::string name);
+
+  /**
+   * The skolem symbols @b u introduced, each paired with the existential
+   * variable it replaced and the term it was replaced by.
+   *
+   * Skolemisation works on a formula in NNF rather than a prenex one, and a
+   * skolem's arguments are the universals it actually depends on -- those
+   * occurring below it, together with the ones inherited through existentials
+   * above it. Anyone reconstructing the step needs that term as built rather
+   * than re-derived, which is what this exposes.
+   */
+  void introducedSkolems(Unit* u,
+    Stack<std::tuple<Signature::Symbol*, unsigned, Term*>>& out) const;
   
 
   void outputUnsatCore(std::ostream& out, Unit* refutation);

@@ -101,6 +101,23 @@ void InferenceStore::recordIntroducedSkolemSymbol(Unit* u, Signature::Symbol* sy
   pStack->emplace(sym);
 }
 
+void InferenceStore::introducedSkolems(Unit* u,
+  Stack<std::tuple<Signature::Symbol*, unsigned, Term*>>& out) const
+{
+  SymbolStack symbols;
+  if (!_introducedSymbols.find(u->number(), symbols)) {
+    return;
+  }
+  for (Signature::Symbol* sym : symbols) {
+    unsigned replacedVar;
+    Term* symTerm;
+    if (_introducedSymbolReplacedVars.find(sym, replacedVar) &&
+        _introducedSkolemSymTerms.find(sym, symTerm)) {
+      out.push({sym, replacedVar, symTerm});
+    }
+  }
+}
+
 /**
  * Record the introduction of a split name
  */
