@@ -235,7 +235,7 @@ Clause* BinaryResolution::generateClause(Clause* queryCl, Literal* queryLit, Cla
         }
       }
       InferenceStore::instance()->recordPremiseUse(cl, premise, literal,
-        TermList::empty(), bindings);
+        TermList::empty(), 0, bindings);
     };
     record(queryCl, queryLit, [&subs](TermList t) { return subs->applyToQuery(t); });
     record(resultCl, resultLit, [&subs](TermList t) { return subs->applyToResult(t); });

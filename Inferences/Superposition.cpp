@@ -15,6 +15,7 @@
 #include "Debug/RuntimeStatistics.hpp"
 
 #include "Forwards.hpp"
+#include "Lib/DHSet.hpp"
 #include "Lib/Environment.hpp"
 #include "Lib/Metaiterators.hpp"
 #include "Lib/PairUtils.hpp"
@@ -24,6 +25,9 @@
 #include "Kernel/Clause.hpp"
 #include "Kernel/ColorHelper.hpp"
 #include "Kernel/EqHelper.hpp"
+#include "Kernel/InferenceStore.hpp"
+#include "Kernel/Substitution.hpp"
+#include "Kernel/Substitution.hpp"
 #include "Kernel/Inference.hpp"
 #include "Kernel/Ordering.hpp"
 #include "Kernel/SortHelper.hpp"
@@ -489,6 +493,26 @@ Clause* Superposition<higherOrder>::performSuperposition(
       eqLHS,
       rwTerm
     ));
+  }
+
+  // What the inference did to each premise: which literal, which subterm of it
+  // or which side of the equation, and the unifier -- which is discarded with
+  // the clause built, and whose two premises live in different variable banks.
+  {
+    auto record = [&](Clause* premise, Literal* on, TermList term,
+                      bool isResult, unsigned flags) {
+      Substitution s;
+      DHSet<unsigned, FnvHash, IdentityHash> vars;
+      premise->collectVars(vars);
+      for (unsigned v : iterTraits(vars.iterator())) {
+        s.bindUnbound(v, subst->apply(TermList(v, false), isResult));
+      }
+      InferenceStore::instance()->recordPremiseUse(clause, premise, on, term,
+        flags, s);
+    };
+    record(rwClause, rwLit, rwTerm, !eqIsResult,
+      doSimS ? InferenceStore::rewritesWholePremise : 0);
+    record(eqClause, eqLit, eqLHS, eqIsResult, 0);
   }
 
   return clause;

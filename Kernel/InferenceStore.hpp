@@ -95,13 +95,23 @@ public:
      * the equation doing the rewriting in the premise it comes from.
      */
     TermList term;
+    /** `rewritesWholePremise`, or zero. */
+    unsigned flags;
     Stack<std::pair<unsigned, TermList>> bindings;
   };
 
   static const unsigned literalNone = UINT_MAX;
 
+  /**
+   * The inference rewrote the term it acted on throughout the premise, rather
+   * than only in the literal recorded against it: what superposition does when
+   * it is simultaneous.
+   */
+  static const unsigned rewritesWholePremise = 1;
+
   void recordPremiseUse(Unit* generated, Unit* premise, unsigned literal,
-    TermList term, const Stack<std::pair<unsigned, TermList>>& bindings);
+    TermList term, unsigned flags,
+    const Stack<std::pair<unsigned, TermList>>& bindings);
 
   /**
    * The same, for an inference that already holds the substitution it applied
@@ -110,7 +120,7 @@ public:
    * as themselves.
    */
   void recordPremiseUse(Unit* generated, Clause* premise, Literal* on,
-    TermList term, const Substitution& subst);
+    TermList term, unsigned flags, const Substitution& subst);
 
   /** How @b u used each of its premises, empty when nothing was recorded. */
   const Stack<PremiseUse>* premiseUses(Unit* u) const;

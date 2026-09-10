@@ -200,9 +200,9 @@ bool ForwardDemodulation<higherOrder>::perform(Clause* cl, Clause*& replacement,
               continue;
             }
             InferenceStore::instance()->recordPremiseUse(replacement, cl, lit,
-              trm, Substitution());
+              trm, 0, Substitution());
             InferenceStore::instance()->recordPremiseUse(replacement,
-              demodulator, equation, equation->termArg(side), subst);
+              demodulator, equation, equation->termArg(side), 0, subst);
             break;
           }
         }
