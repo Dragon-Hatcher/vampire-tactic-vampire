@@ -18,6 +18,9 @@
 #include "Lib/VirtualIterator.hpp"
 
 #include "Kernel/Clause.hpp"
+#include "Lib/DHSet.hpp"
+#include "Kernel/Substitution.hpp"
+#include "Kernel/InferenceStore.hpp"
 #include "Kernel/Inference.hpp"
 #include "Kernel/RobSubstitution.hpp"
 #include "Kernel/SortHelper.hpp"
@@ -221,7 +224,24 @@ Clause* ExtensionalityResolution::performExtensionalityResolution(
     }
   }
 
-  return Clause::fromStack(*resLits, GeneratingInference2(InferenceRule::EXTENSIONALITY_RESOLUTION, extCl, otherCl));
+  Clause* res = Clause::fromStack(*resLits, GeneratingInference2(InferenceRule::EXTENSIONALITY_RESOLUTION, extCl, otherCl));
+  // The unifier that makes the equality and the inequality complementary, and
+  // which literal each premise contributed; the clause keeps none of it.
+  {
+    auto record = [&](Clause* premise, Literal* on, unsigned bank) {
+      Substitution s;
+      DHSet<unsigned, FnvHash, IdentityHash> vars;
+      premise->collectVars(vars);
+      for (unsigned v : iterTraits(vars.iterator())) {
+        s.bindUnbound(v, subst->apply(TermList(v, false), bank));
+      }
+      InferenceStore::instance()->recordPremiseUse(res, premise, on,
+        TermList::empty(), 0, s);
+    };
+    record(extCl, extLit, 0);
+    record(otherCl, otherLit, 1);
+  }
+  return res;
 }
   
 /**
