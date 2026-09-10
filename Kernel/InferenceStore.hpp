@@ -156,6 +156,59 @@ public:
   void recoverSubsumptionResolutionUses(Unit* u);
 
   /**
+   * One state of one of clausification's generalised clauses.
+   *
+   * Clausification works on a set of generalised clauses -- disjunctions of
+   * signed subformulas, together with the bindings the variables they quantify
+   * have been given -- starting from the formula itself and replacing one
+   * signed subformula at a time until nothing but literals is left. Each
+   * replacement is a step that holds on its own, and the clauses that come out
+   * are the states that no longer have anything to replace.
+   *
+   * A state records the clause as it then stands, which of its positions was
+   * replaced to reach it, and what was put there. Which conjunct a clause came
+   * from, which way round an equivalence was taken, and what a quantifier was
+   * skolemised at are all in there; without it they would have to be searched
+   * for.
+   */
+  struct GenClauseState {
+    /** The state this one was reached from, or `stateNone`. */
+    unsigned parent;
+    /** The position replaced in that state, or `positionNone`. */
+    unsigned position;
+    /** The signed subformulas of the clause as it stands. */
+    Stack<std::pair<Formula*, bool>> literals;
+    /** What was put in the replaced position. */
+    Stack<std::pair<Formula*, bool>> replacement;
+    /** What each variable the clause quantifies has been bound to. */
+    Stack<std::pair<unsigned, TermList>> bindings;
+  };
+
+  static const unsigned stateNone = UINT_MAX;
+  static const unsigned positionNone = UINT_MAX;
+
+  unsigned newGenClauseState(GenClauseState state);
+  const GenClauseState* genClauseState(unsigned id) const;
+
+  /** The state of the generalised clause @b clause came out of. */
+  void recordGenClauseOfClause(Unit* clause, unsigned state);
+  unsigned genClauseOfClause(Unit* clause) const;
+
+  /**
+   * Which argument of each conjunction the clausification of @b clause went
+   * into.
+   *
+   * The other clausifier walks a formula in negation normal form, taking every
+   * disjunct into the clause it is building and each conjunct into a clause of
+   * its own. So a clause is one path through the conjunctions, and this is the
+   * path: without it, replay would have to try the conjuncts and see which one
+   * leads to the clause in hand.
+   */
+  void recordConjunctChoices(Unit* clause,
+    const Stack<std::pair<Formula*, unsigned>>& choices);
+  const Stack<std::pair<Formula*, unsigned>>* conjunctChoices(Unit* clause) const;
+
+  /**
    * A predicate clausification introduced to name a subformula, the variables
    * it was applied to, and the formula it names.
    *
@@ -200,6 +253,9 @@ private:
   unsigned _polarityFlipBoundary = 0;
 
   DHMap<unsigned, Stack<Naming>> _namings;
+  Stack<GenClauseState> _genClauseStates;
+  DHMap<unsigned, unsigned> _genClauseOfClause;
+  DHMap<unsigned, Stack<std::pair<Formula*, unsigned>>> _conjunctChoices;
 
   struct TPTPProofPrinter;
   struct Smt2ProofCheckPrinter;

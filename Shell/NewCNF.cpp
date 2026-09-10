@@ -759,7 +759,7 @@ void NewCNF::processLet(Term* term, Occurrences &occurrences)
   // should be read "de-let-ed contents"
   Formula* deletedContentsFormula = BoolTermFormula::create(eliminateLet(term));
 
-  occurrences.replaceBy(deletedContentsFormula);
+  occurrences.replaceBy(deletedContentsFormula, this);
 
   enqueue(deletedContentsFormula, occurrences);
 }
@@ -1159,7 +1159,7 @@ void NewCNF::process(QuantifiedFormula* g, Occurrences &occurrences)
   enqueue(g->qarg(), occurrences);
 
   // Correct all the GenClauses to mention qarg instead of g
-  occurrences.replaceBy(g->qarg());
+  occurrences.replaceBy(g->qarg(), this);
 }
 
 void NewCNF::processBoolterm(TermList ts, Occurrences &occurrences)
@@ -1176,7 +1176,7 @@ void NewCNF::processBoolterm(TermList ts, Occurrences &occurrences)
   if (!term->isSpecial()) {
     auto f = new AtomicFormula(Literal::createEquality(true, ts, TermList(Term::foolTrue()), AtomicSort::boolSort()));
     enqueue(f, occurrences);
-    occurrences.replaceBy(f);
+    occurrences.replaceBy(f, this);
     return;
   }
 
@@ -1290,7 +1290,7 @@ void NewCNF::nameSubformula(Formula* g, Occurrences &occurrences)
       env.signature->getPredicate(naming->functor()), arguments, g);
   }
 
-  occurrences.replaceBy(name);
+  occurrences.replaceBy(name, this);
 
   enqueue(g);
 
@@ -1487,6 +1487,8 @@ void NewCNF::toClauses(SPGenClause gc, Stack<Clause*>& output)
     SPGenClause genClause = makeGenClause(gls, gc->bindings, BindingList::empty());
     if (genClause->valid) {
       Clause* clause = toClause(genClause);
+      // Which generalised clause this came out of, and so how it was derived.
+      InferenceStore::instance()->recordGenClauseOfClause(clause, gc->state);
       LOG1(clause->toString());
       output.push(clause);
     } else {

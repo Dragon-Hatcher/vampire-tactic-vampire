@@ -193,6 +193,46 @@ const Stack<InferenceStore::PremiseUse>* InferenceStore::premiseUses(Unit* u) co
   return _premiseUses.findPtr(u->number());
 }
 
+unsigned InferenceStore::newGenClauseState(GenClauseState state)
+{
+  _genClauseStates.push(std::move(state));
+  return _genClauseStates.size() - 1;
+}
+
+const InferenceStore::GenClauseState* InferenceStore::genClauseState(unsigned id) const
+{
+  if (id >= _genClauseStates.size()) {
+    return nullptr;
+  }
+  return &_genClauseStates[id];
+}
+
+void InferenceStore::recordGenClauseOfClause(Unit* clause, unsigned state)
+{
+  _genClauseOfClause.set(clause->number(), state);
+}
+
+unsigned InferenceStore::genClauseOfClause(Unit* clause) const
+{
+  unsigned state;
+  if (!_genClauseOfClause.find(clause->number(), state)) {
+    return stateNone;
+  }
+  return state;
+}
+
+void InferenceStore::recordConjunctChoices(Unit* clause,
+  const Stack<std::pair<Formula*, unsigned>>& choices)
+{
+  _conjunctChoices.set(clause->number(), choices);
+}
+
+const Stack<std::pair<Formula*, unsigned>>*
+InferenceStore::conjunctChoices(Unit* clause) const
+{
+  return _conjunctChoices.findPtr(clause->number());
+}
+
 void InferenceStore::recordIntroducedNaming(Unit* u, Signature::Symbol* sym,
   const Stack<unsigned>& arguments, Formula* named)
 {

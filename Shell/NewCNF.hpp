@@ -24,6 +24,7 @@
 #include "Lib/DHMap.hpp"
 #include "Kernel/Substitution.hpp"
 #include "Kernel/Formula.hpp" //TODO AYB remove, it is not required in master
+#include "Kernel/InferenceStore.hpp"
 
 #undef LOGGING
 #define LOGGING 0
@@ -131,6 +132,12 @@ private:
       : valid(true), bindings(bindings), foolBindings(foolBindings), _literals(size), _size(0) {}
 
     bool valid; // used for lazy deletion from Occurrences(s); see below
+
+    /**
+     * The recorded state of this clause as it now stands, for anything
+     * replaying the clausification: each replacement gives it a new one.
+     */
+    unsigned state = Kernel::InferenceStore::stateNone;
 
     BindingList* bindings; // the list is not owned by the GenClause (they will shallow-copied and shared)
     BindingList* foolBindings;
@@ -350,7 +357,7 @@ private:
       return occ;
     }
 
-    void replaceBy(Formula* f) {
+    void replaceBy(Formula* f, NewCNF* cnf) {
       Occurrences::Iterator occit(*this);
 
       bool negateOccurrenceSign = false;
@@ -381,6 +388,7 @@ private:
         if (negateOccurrenceSign) {
           sign(gl) = OPPOSITE(sign(gl));
         }
+        cnf->recordReplacement(occ.gc, occ.position);
       }
     }
 
@@ -450,9 +458,44 @@ private:
     }
   }
 
+  /**
+   * Records the clause as it now stands: how it was reached, and what was put
+   * in the position that was replaced.
+   */
+  void recordGenClause(SPGenClause gc, unsigned parent, unsigned position,
+      List<GenLit>* replacement) {
+    Kernel::InferenceStore::GenClauseState state;
+    state.parent = parent;
+    state.position = position;
+    GenClause::Iterator it = gc->genLiterals();
+    while (it.hasNext()) {
+      GenLit gl = it.next();
+      state.literals.push({formula(gl), sign(gl)});
+    }
+    List<GenLit>::Iterator rit(replacement);
+    while (rit.hasNext()) {
+      GenLit gl = rit.next();
+      state.replacement.push({formula(gl), sign(gl)});
+    }
+    BindingList::Iterator bit(gc->bindings);
+    while (bit.hasNext()) {
+      Binding b = bit.next();
+      state.bindings.push({b.first, TermList(b.second)});
+    }
+    gc->state = Kernel::InferenceStore::instance()->newGenClauseState(std::move(state));
+  }
+
+  void recordReplacement(SPGenClause gc, unsigned position) {
+    List<GenLit>* replacement = new List<GenLit>(gc->_literals[position]);
+    recordGenClause(gc, gc->state, position, replacement);
+    List<GenLit>::destroy(replacement);
+  }
+
   void introduceGenClause(List<GenLit>* gls, BindingList* bindings, BindingList* foolBindings) {
     unsigned expectedSize = List<GenLit>::length(gls);
     SPGenClause gc = makeGenClause(gls, bindings, foolBindings);
+    recordGenClause(gc, Kernel::InferenceStore::stateNone,
+      Kernel::InferenceStore::positionNone, List<GenLit>::empty());
     registerGenClause(gc, expectedSize);
   }
 
@@ -492,6 +535,7 @@ private:
     _literalsCache.reset();
     _formulasCache.reset();
 
+    recordGenClause(newGc, gc->state, position, gls);
     registerGenClause(newGc, size);
   }
 
