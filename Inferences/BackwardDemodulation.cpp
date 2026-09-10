@@ -22,6 +22,10 @@
 #include "Kernel/Clause.hpp"
 #include "Kernel/ColorHelper.hpp"
 #include "Kernel/EqHelper.hpp"
+#include "Kernel/SubstHelper.hpp"
+#include "Kernel/Substitution.hpp"
+#include "Kernel/Matcher.hpp"
+#include "Kernel/InferenceStore.hpp"
 #include "Kernel/Inference.hpp"
 #include "Kernel/Ordering.hpp"
 #include "Kernel/Term.hpp"
@@ -158,6 +162,24 @@ struct BackwardDemodulation<higherOrder>::ResultFn
     );
     if(env.options->proofExtra() == Options::ProofExtra::FULL)
       env.proofExtra.insert(replacement, new BackwardDemodulationExtra(lhs, lhsS));
+    // Which subterm of which literal was rewritten, by which side of the
+    // demodulator and at what match: as for forward demodulation, none of it
+    // survives the inference. The demodulator is this clause's own equation
+    // here, so matching it against the rewritten term recovers the match.
+    for (unsigned side = 0; side < 2; side++) {
+      Substitution subst;
+      if (!MatchingUtils::matchTerms(_eqLit->termArg(side), lhsS, subst)) {
+        continue;
+      }
+      if (SubstHelper::apply(_eqLit->termArg(1 - side), subst) != rhsS) {
+        continue;
+      }
+      InferenceStore::instance()->recordPremiseUse(replacement,
+        qr.data->clause, qr.data->literal, lhsS, 0, Substitution());
+      InferenceStore::instance()->recordPremiseUse(replacement, _cl, _eqLit,
+        _eqLit->termArg(side), 0, subst);
+      break;
+    }
     return BwSimplificationRecord(qr.data->clause, replacement);
   }
 private:

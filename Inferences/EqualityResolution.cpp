@@ -16,6 +16,9 @@
 #include "Lib/Metaiterators.hpp"
 #include "Lib/Stack.hpp"
 
+#include "Kernel/InferenceStore.hpp"
+#include "Kernel/Substitution.hpp"
+#include "Lib/DHSet.hpp"
 #include "Lib/Environment.hpp"
 #include "Shell/Options.hpp"
 
@@ -77,6 +80,18 @@ Clause* unifierToClause(Clause* cl, Literal* lit, AbstractingUnifier* unif, cons
   auto res = Clause::fromStack(*resLits, GeneratingInference1(InferenceRule::EQUALITY_RESOLUTION, cl));
   if(env.options->proofExtra() == Options::ProofExtra::FULL)
     env.proofExtra.insert(res, new EqualityResolutionExtra(lit));
+  // The unifier that makes the two sides of the inequality one term, which the
+  // clause does not keep, and the inequality it was resolved on.
+  {
+    Substitution subst;
+    DHSet<unsigned, FnvHash, IdentityHash> vars;
+    cl->collectVars(vars);
+    for (unsigned v : iterTraits(vars.iterator())) {
+      subst.bindUnbound(v, unif->subs().apply(TermList(v, false), kVarBank));
+    }
+    InferenceStore::instance()->recordPremiseUse(res, cl, lit,
+      TermList::empty(), 0, subst);
+  }
   return res;
 }
 
