@@ -1277,6 +1277,18 @@ void NewCNF::nameSubformula(Formula* g, Occurrences &occurrences)
   Literal* naming = createNamingLiteral(g, fv);
   Formula* name = new AtomicFormula(naming);
   env.statistics->formulaNames++;
+  // The clauses saying what the name means come out of this clausification
+  // rather than being stated on their own, so nothing else says what it names.
+  {
+    Stack<unsigned> arguments;
+    for (unsigned i = 0; i < naming->arity(); i++) {
+      TermList argument = *naming->nthArgument(i);
+      ASS(argument.isVar());
+      arguments.push(argument.var());
+    }
+    InferenceStore::instance()->recordIntroducedNaming(_beingClausified,
+      env.signature->getPredicate(naming->functor()), arguments, g);
+  }
 
   occurrences.replaceBy(name);
 

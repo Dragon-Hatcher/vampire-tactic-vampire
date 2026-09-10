@@ -1163,8 +1163,9 @@ bool Splitter::doSplitting(Clause* cl)
   FormulaList* resLst=0;
   // The definition of each component, the clause naming it, and the literals
   // of this clause it was named for; the renaming between the last two is
-  // recorded once the step they justify exists.
-  Stack<std::tuple<Unit*, Clause*, const LiteralStack*>> named;
+  // recorded once the step they justify exists. The literals are copied: the
+  // components live in a stack that is reused.
+  Stack<std::tuple<Unit*, Clause*, LiteralStack>> named;
 
   unsigned compCnt = comps.size();
   for(unsigned i=0; i<compCnt; ++i) {
@@ -1184,7 +1185,7 @@ bool Splitter::doSplitting(Clause* cl)
 
     UnitList::push(getDefinitionFromName(compName),ps);
     FormulaList::push(new NamedFormula(getFormulaStringFromName(compName)),resLst);
-    named.push({getDefinitionFromName(compName), compCl, &comp});
+    named.push({getDefinitionFromName(compName), compCl, comp});
   }
 
   SATClause* splitClause = SATClause::fromStack(satClauseLits);
@@ -1210,8 +1211,8 @@ bool Splitter::doSplitting(Clause* cl)
 
   splitClause->setInference(new FOConversionInference(scl));
 
-  for (auto [definition, compCl, comp] : named) {
-    recordComponentRenaming(scl, definition, compCl, comp->size(), comp->begin());
+  for (auto& [definition, compCl, comp] : named) {
+    recordComponentRenaming(scl, definition, compCl, comp.size(), comp.begin());
   }
 
   addSatClauseToSolver(splitClause);

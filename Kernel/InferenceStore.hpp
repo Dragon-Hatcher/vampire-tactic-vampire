@@ -156,6 +156,28 @@ public:
   void recoverSubsumptionResolutionUses(Unit* u);
 
   /**
+   * A predicate clausification introduced to name a subformula, the variables
+   * it was applied to, and the formula it names.
+   *
+   * Clausification names a subformula that occurs too often to be worth
+   * expanding, and works on with the name in its place. The definition never
+   * becomes a step of its own -- the clauses saying what the name means come
+   * out of the same clausification -- so nothing in the proof says what the
+   * name stands for.
+   */
+  struct Naming {
+    Signature::Symbol* symbol;
+    Stack<unsigned> arguments;
+    Formula* named;
+  };
+
+  void recordIntroducedNaming(Unit* u, Signature::Symbol* sym,
+    const Stack<unsigned>& arguments, Formula* named);
+
+  /** The subformulas @b u named, empty when it named none. */
+  const Stack<Naming>* namings(Unit* u) const;
+
+  /**
    * The skolem symbols @b u introduced, each paired with the existential
    * variable it replaced and the term it was replaced by.
    *
@@ -176,6 +198,8 @@ public:
 
 private:
   unsigned _polarityFlipBoundary = 0;
+
+  DHMap<unsigned, Stack<Naming>> _namings;
 
   struct TPTPProofPrinter;
   struct Smt2ProofCheckPrinter;

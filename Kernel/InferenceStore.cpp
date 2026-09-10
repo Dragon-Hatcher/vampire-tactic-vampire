@@ -193,6 +193,19 @@ const Stack<InferenceStore::PremiseUse>* InferenceStore::premiseUses(Unit* u) co
   return _premiseUses.findPtr(u->number());
 }
 
+void InferenceStore::recordIntroducedNaming(Unit* u, Signature::Symbol* sym,
+  const Stack<unsigned>& arguments, Formula* named)
+{
+  Stack<Naming>* namings;
+  _namings.getValuePtr(u->number(), namings);
+  namings->push({sym, arguments, named});
+}
+
+const Stack<InferenceStore::Naming>* InferenceStore::namings(Unit* u) const
+{
+  return _namings.findPtr(u->number());
+}
+
 void InferenceStore::introducedSkolems(Unit* u,
   Stack<std::tuple<Signature::Symbol*, unsigned, Term*>>& out) const
 {
