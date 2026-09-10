@@ -108,6 +108,13 @@ struct URResolution<synthesis>::Item
     _atMostOneNonGround = nonGroundCnt<=1;
     identityOn(_origSubst, cl);
     _premiseSubsts.ensure(litslen);
+    // The literals are moved about as the best one to resolve next is chosen,
+    // so where each of them started is kept: that is what says which literal
+    // of the clause a premise resolved away.
+    _origIndex.ensure(litslen);
+    for (unsigned i = 0; i < litslen; i++) {
+      _origIndex[i] = i;
+    }
 
     _activeLength = selectedOnly ? cl->numSelected() : litslen;
     ASS_REP2(_activeLength>=litslen-1, cl->toString(), cl->numSelected());
@@ -251,8 +258,8 @@ struct URResolution<synthesis>::Item
       if (!_premises[i]) {
         continue;
       }
-      InferenceStore::instance()->recordPremiseUse(res, _premises[i], i,
-        TermList::empty(), 0,
+      InferenceStore::instance()->recordPremiseUse(res, _premises[i],
+        _origIndex[i], TermList::empty(), 0,
         normalised(const_cast<Item*>(this)->_premiseSubsts[i]));
     }
     return res;
@@ -292,6 +299,7 @@ struct URResolution<synthesis>::Item
     }
     if(idx!=bestIdx) {
       swap(_lits[idx], _lits[bestIdx]);
+      swap(_origIndex[idx], _origIndex[bestIdx]);
     }
   }
 
@@ -314,6 +322,7 @@ struct URResolution<synthesis>::Item
    */
   Substitution _origSubst;
   DArray<Substitution> _premiseSubsts;
+  DArray<unsigned> _origIndex;
 
   /** Unresolved literals, or zeroes at positions of the resolved ones
    *
@@ -441,6 +450,7 @@ void URResolution<synthesis>::doBackwardInferences(Clause* cl, ClauseList*& acc)
     }
     ASS(!_selectedOnly || pos<ucl->numSelected());
     swap(itm->_lits[0], itm->_lits[pos]);
+    swap(itm->_origIndex[0], itm->_origIndex[pos]);
     itm->resolveLiteral(0, unif, cl, /* useQuerySubstitution */ false);
 
     processAndGetClauses(itm, 1, acc);

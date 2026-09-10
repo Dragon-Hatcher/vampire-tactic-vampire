@@ -17,6 +17,9 @@
 #include "Indexing/LiteralMiniIndex.hpp"
 #include "Kernel/ColorHelper.hpp"
 #include "Kernel/EqHelper.hpp"
+#include "Lib/DHSet.hpp"
+#include "Kernel/Substitution.hpp"
+#include "Kernel/InferenceStore.hpp"
 #include "Kernel/Inference.hpp"
 #include "Kernel/MLMatcherSD.hpp"
 #include "Kernel/Matcher.hpp"
@@ -593,6 +596,26 @@ isRedundant:
               premises = pvi(getSingletonIterator(mcl));
               replacement = Clause::fromStack(*resLits,
                  SimplifyingInference2(InferenceRule::FORWARD_SUBSUMPTION_DEMODULATION, cl, mcl));
+              // Which subterm of which literal was rewritten, by which side of
+              // which equation, and at what match: the clause keeps none of it.
+              // Only the side premise is instantiated, the match being the one
+              // its subsumption was found at.
+              {
+                Substitution theta;
+                DHSet<unsigned, FnvHash, IdentityHash> mclVars;
+                mcl->collectVars(mclVars);
+                for (unsigned v : iterTraits(mclVars.iterator())) {
+                  TermList image = TermList(v, false);
+                  if (binder.isBound(v)) {
+                    image = binder.applyTo(TermList(v, false));
+                  }
+                  theta.bindUnbound(v, image);
+                }
+                InferenceStore::instance()->recordPremiseUse(replacement, cl,
+                  dlit, TermList(lhsS), 0, Substitution());
+                InferenceStore::instance()->recordPremiseUse(replacement, mcl,
+                  eqLit, lhs, 0, theta);
+              }
 
 #if FSD_LOG_INFERENCES
               std::cout << "\% Begin Inference \"FSD-" << replacement->number() << "\"\n";
