@@ -54,7 +54,7 @@ endif()
 # add top level directory to the search path of compiler
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
-add_compile_definitions(ABSOLUTE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_compile_definitions(ABSOLUTE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 
 if(CMAKE_BUILD_TYPE STREQUAL Debug)
   add_compile_definitions(VDEBUG=1)
@@ -117,7 +117,7 @@ endif()
 option(COVERAGE "generate code coverage reports" OFF)
 if(COVERAGE)
   message(STATUS "Coverage is enabled")
-  include(${CMAKE_SOURCE_DIR}/cmake/CodeCoverage.cmake)
+  include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/CodeCoverage.cmake)
 
   message(STATUS "Removing previous coverage data")
   file(GLOB_RECURSE GCDA_FILES ${CMAKE_BINARY_DIR}/*.gcda)
@@ -209,7 +209,7 @@ find_package(
     NO_CMAKE_SYSTEM_PACKAGE_REGISTRY
     PATHS
       ${Z3_DIR}
-      ${CMAKE_SOURCE_DIR}/z3/build/
+      ${CMAKE_CURRENT_SOURCE_DIR}/z3/build/
 )
 
 if (Z3_FOUND)
@@ -274,7 +274,7 @@ endif()
 #################################################################
 execute_process(
     COMMAND git rev-parse --is-inside-work-tree
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
     OUTPUT_VARIABLE GIT_IS_REPOSITORY
     OUTPUT_STRIP_TRAILING_WHITESPACE
 )
@@ -283,10 +283,10 @@ if (GIT_IS_REPOSITORY STREQUAL true)
   # VAMPIRE_VERSION_NUMBER and CMAKE_BUILD_TYPE used by version.cpp.in through
   # ConfigureGitVersionCpp.cmake
   add_custom_target(update_git_version ALL
-    COMMAND ${CMAKE_COMMAND} -DVAMPIRE_SOURCE_DIR=${CMAKE_SOURCE_DIR}
+    COMMAND ${CMAKE_COMMAND} -DVAMPIRE_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
                   -DVAMPIRE_VERSION_NUMBER=${VAMPIRE_VERSION_NUMBER}
                   -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
-                  -P ${CMAKE_SOURCE_DIR}/cmake/ConfigureGitVersionCpp.cmake
+                  -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/ConfigureGitVersionCpp.cmake
     BYPRODUCTS version.cpp
     VERBATIM
   )
