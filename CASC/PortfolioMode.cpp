@@ -647,6 +647,9 @@ void PortfolioMode::runSlice(Options& opt)
     exit(EXIT_FAILURE);
   }
 
+  if (UIHelper::onProofFound)
+    UIHelper::onProofFound();
+
   fs::path path = proofPath(getppid(), getpid());
   addCommentSignForSZS(cout)
     << " found proof, printing to " << path << "..." << endl;

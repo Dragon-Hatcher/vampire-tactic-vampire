@@ -63,6 +63,18 @@ public:
   static void outputResult(std::ostream& out);
 
   /**
+   * If set, called in the process that has just found a proof, before the
+   * proof is written out.
+   *
+   * This is an extension point for embedders that want to emit their own
+   * representation of @b env.statistics->refutation. It exists because the
+   * process that finds the proof is not always the one that started the
+   * search: in portfolio modes it is a short-lived child, whose refutation is
+   * unreachable from the parent.
+   */
+  static void (*onProofFound)();
+
+  /**
    * Return true if there was a conjecture formula among the parsed units
    *
    * The purpose of this information is that when we report success in the

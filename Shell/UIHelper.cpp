@@ -136,6 +136,7 @@ bool UIHelper::s_expecting_sat=false;
 bool UIHelper::s_expecting_unsat=false;
 
 bool UIHelper::portfolioParent=false;
+void (*UIHelper::onProofFound)() = nullptr;
 bool UIHelper::satisfiableStatusWasAlreadyOutput=false;
 
 bool UIHelper::spiderOutputDone = false;
