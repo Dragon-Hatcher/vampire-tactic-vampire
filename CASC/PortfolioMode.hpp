@@ -50,6 +50,7 @@ private:
 
   // returns a path to a temporary file with a proof in it on success
   std::optional<std::filesystem::path> runSchedule(Schedule schedule);
+  std::optional<std::filesystem::path> runScheduleByBeats(Schedule schedule);
   bool runScheduleAndRecoverProof(Schedule schedule);
   [[noreturn]] void runSlice(std::string sliceCode, int remainingTime, bool scheduleRepeat);
   [[noreturn]] void runSlice(Options& strategyOpt);

@@ -1302,6 +1302,7 @@ void SaturationAlgorithm::doOneAlgorithmStep()
   // we really want to do it here (it's explained "activations started" to the user)
   // and it should correspond to the number of times _passive->popSelected() was called (for good LRS estimates to work)
   env.statistics->activations++;
+  Timer::beat();
 
   if (!handleClauseBeforeActivation(cl)) {
     return;

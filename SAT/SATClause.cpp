@@ -17,6 +17,7 @@
 
 #include "Lib/Allocator.hpp"
 #include "Lib/Environment.hpp"
+#include "Lib/Timer.hpp"
 
 #include "Shell/Statistics.hpp"
 
@@ -37,6 +38,7 @@ unsigned SATClause::_lastNumber = 0;
  */
 void* SATClause::operator new(size_t sz,unsigned lits)
 {
+  Timer::beat();
   return ALLOC_KNOWN(bytesRequiredFor(lits),"SATClause");
 }
 

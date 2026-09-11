@@ -17,6 +17,7 @@
 #include "MinisatInterfacing.hpp"
 
 #include "Lib/DArray.hpp"
+#include "Lib/Timer.hpp"
 
 namespace SAT
 {
@@ -58,7 +59,10 @@ Status MinisatInterfacing<MinisatSolver>::solveUnderAssumptionsLimited(const SAT
     _assumptions.push(vampireLit2Minisat(it.next()));
   }
 
+  uint64_t before = _solver.propagations;
   solveModuloAssumptionsAndSetStatus(conflictCountLimit);
+  // count the work done by the solver: a beat is worth a few dozen propagations
+  Timer::beat(1 + (_solver.propagations - before) / 32);
   return _status;
 }
 

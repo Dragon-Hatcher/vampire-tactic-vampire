@@ -1348,6 +1348,14 @@ Options::Options ()
       {.short_name = "al",
        .description = "Terminate saturation after this many iterations of the main loop. 0 means no limit.",
        .tag = OptionTag::SATURATION})
+  , _heartbeats("heartbeats",this,0,
+      {.short_name = "hb",
+       .description = "Beats per simulated millisecond: with this set, the search counts the steps it takes rather than reading the clock, and every limit is measured in those beats. A run then does not depend on how fast the machine is or on what else it is doing, at the price of the count being only roughly what a millisecond costs. 0 leaves the clock as it is.",
+       .tag = OptionTag::PORTFOLIO})
+  , _wallLimit("wall_limit",this,0,
+      {.short_name = "wl",
+       .description = "Seconds of real time after which to give up, whatever the beats say. Beats stand in for time only as well as they are counted, and a strategy that finds a loop nobody thought to count would otherwise run for ever; reaching this limit is a run that was not reproducible, and says so. 0 leaves it to the beats.",
+       .tag = OptionTag::PORTFOLIO})
   , _satSolver("sat_solver",this,SatSolver::MINISAT, {
       "minisat",
       "cadical"

@@ -24,6 +24,7 @@
 #include "Lib/DHMap.hpp"
 #include "Lib/Int.hpp"
 #include "Lib/Metaiterators.hpp"
+#include "Lib/Timer.hpp"
 
 #include "Shell/Options.hpp"
 #include "Shell/Shuffling.hpp"
@@ -259,6 +260,7 @@ TermOrderingDiagramUP Ordering::createTermOrderingDiagram(bool ground) const
 
 Ordering::Result PrecedenceOrdering::compare(Literal* l1, Literal* l2) const
 {
+  Timer::beat();
   ASS(l1->shared());
   ASS(l2->shared());
 

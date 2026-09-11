@@ -26,6 +26,7 @@
 #include "Lib/Environment.hpp"
 #include "Lib/Metaiterators.hpp"
 #include "Lib/SharedSet.hpp"
+#include "Lib/Timer.hpp"
 
 #include "Shell/Flattening.hpp"
 #include "Shell/Skolem.hpp"
@@ -82,6 +83,7 @@ void NewCNF::clausify(FormulaUnit* unit,Stack<Clause*>& output, Substitution* su
     Formula* g;
     Occurrences occurrences;
     dequeue(g, occurrences);
+    Timer::beat();
 
 #if LOGGING
     cout << std::endl << "---------------------------------------------" << std::endl;

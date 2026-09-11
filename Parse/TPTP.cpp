@@ -21,6 +21,7 @@
 
 #include "Lib/Int.hpp"
 #include "Lib/Environment.hpp"
+#include "Lib/Timer.hpp"
 
 #include "Kernel/Clause.hpp"
 #include "Kernel/FormulaUnit.hpp"
@@ -4107,6 +4108,7 @@ void TPTP::endFof()
   default:
     break;
   }
+  Timer::beat();
   _units.pushBack(unit);
 } // tag
 

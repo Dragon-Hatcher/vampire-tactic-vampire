@@ -20,6 +20,7 @@
 #include "Lib/Comparison.hpp"
 #include "Lib/Int.hpp"
 #include "Lib/Recycled.hpp"
+#include "Lib/Timer.hpp"
 #include "Lib/TriangularArray.hpp"
 
 #include "Kernel/Clause.hpp"
@@ -597,6 +598,10 @@ Clause* ClauseCodeTree::ClauseMatcher::next(int& resolvedQueryLit)
   }
 
   for(;;) {
+    // a matcher step is much cheaper than a unification
+    static unsigned steps = 0;
+    if (!(++steps % 16))
+      Timer::beat();
     LiteralMatcher* lm = &*lms.top();
 
     //get next literal from the literal matcher
@@ -911,6 +916,10 @@ bool ClauseCodeTree::ClauseMatcher::matchGlobalVars(int& resolvedQueryLit)
 
 bool ClauseCodeTree::ClauseMatcher::compatible(ILStruct* bi, MatchInfo* bq, ILStruct* ni, MatchInfo* nq)
 {
+  // cheap, but the innermost loop of subsumption over literal pairings
+  static unsigned pairs = 0;
+  if (!(++pairs % 128))
+    Timer::beat();
   if( lInfos[bq->liIndex].litIndex==lInfos[nq->liIndex].litIndex ||
       (lInfos[bq->liIndex].opposite && lInfos[nq->liIndex].opposite) ) {
     return false;

@@ -23,6 +23,7 @@
 #include "Lib/Int.hpp"
 #include "Lib/SharedSet.hpp"
 #include "Lib/Stack.hpp"
+#include "Lib/Timer.hpp"
 
 #include "Saturation/Splitter.hpp"
 
@@ -88,6 +89,7 @@ Clause::Clause(Literal* const* lits, unsigned length, Inference inf)
  */
 void* Clause::operator new(size_t sz, unsigned lits)
 {
+  Timer::beat();
   ASS_EQ(sz,sizeof(Clause));
 
   RSTAT_CTR_INC("clauses created");

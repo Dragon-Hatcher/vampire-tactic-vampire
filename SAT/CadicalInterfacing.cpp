@@ -18,6 +18,7 @@
 #include "SATInference.hpp"
 
 #include "Lib/Array.hpp"
+#include "Lib/Timer.hpp"
 
 namespace SAT
 {
@@ -37,6 +38,7 @@ CadicalInterfacing::CadicalInterfacing()
 
 Status CadicalInterfacing::solveUnderAssumptionsLimited(const SATLiteralStack& assumps, unsigned conflictCountLimit)
 {
+  Timer::beat();
   // load assumptions:
   SATLiteralStack::ConstIterator it(assumps);
   _assumptions.clear();

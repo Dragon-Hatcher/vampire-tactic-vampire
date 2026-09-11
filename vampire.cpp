@@ -95,8 +95,11 @@ Problem* preprocessProblem(Problem* prb)
   // cf ProvingHelper::runVampire
   if (env.options->randomSeed() != 0) {
     Lib::Random::setSeed(env.options->randomSeed());
-  } else {
+  } else if (!env.options->heartbeats()) {
     Lib::Random::resetSeed();
+  } else {
+    // heartbeats are for reproducible runs: use a fixed seed
+    Lib::Random::setSeed(1);
   }
 
   TIME_TRACE(TimeTrace::PREPROCESSING);

@@ -89,8 +89,11 @@ void ProvingHelper::runVampire(Problem& prb, const Options& opt)
   // cf getPreprocessedProblem in vampire.cpp
   if (opt.randomSeed() != 0) {
     Lib::Random::setSeed(opt.randomSeed());
-  } else {
+  } else if (!opt.heartbeats()) {
     Lib::Random::resetSeed();
+  } else {
+    // heartbeats are for reproducible runs: use a fixed seed
+    Lib::Random::setSeed(1);
   }
 
   try

@@ -33,8 +33,16 @@ namespace Timer {
   // blocks if a resource limit was already reached and we are exiting
   void disableLimitEnforcement();
 
+  // heartbeats: count steps of the search instead of reading the clock;
+  // elapsed time is then the beat count divided by the beats per millisecond
+  bool heartbeats();
+  void beat(unsigned beats = 1);
+  unsigned long long elapsedBeats();
+
   // elapsed time
   long elapsedMilliseconds();
+  // real elapsed time, even with heartbeats
+  long realMilliseconds();
   inline long elapsedDeciseconds()
   { return elapsedMilliseconds() / 100; }
 

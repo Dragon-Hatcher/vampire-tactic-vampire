@@ -16,6 +16,7 @@
 
 #include "Lib/Environment.hpp"
 #include "Lib/Comparison.hpp"
+#include "Lib/Timer.hpp"
 #include "Shell/Shuffling.hpp"
 
 #include "Shell/Options.hpp"
@@ -772,6 +773,7 @@ Ordering::Result KBO::compare(TermList tl1, TermList tl2) const
 
 Ordering::Result KBO::compare(AppliedTerm tl1, AppliedTerm tl2) const
 {
+  Timer::beat();
   if(tl1.equalsShallow(tl2)) {
     return EQUAL;
   }

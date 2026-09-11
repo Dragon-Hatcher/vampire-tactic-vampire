@@ -23,6 +23,7 @@
 #include "Lib/DArray.hpp"
 #include "Lib/DHSet.hpp"
 #include "Lib/DHMap.hpp"
+#include "Lib/Timer.hpp"
 
 #include "Renaming.hpp"
 #include "SortHelper.hpp"
@@ -264,6 +265,7 @@ bool RobSubstitution::occurs(VarSpec const& toFind, TermSpec const& ts)
 
 bool RobSubstitution::unify(TermSpec s, TermSpec t)
 {
+  Timer::beat();
 #define DEBUG_UNIFY(lvl, ...) if (lvl < 0) DBG("unify: ", __VA_ARGS__)
   DEBUG_UNIFY(0, *this, ".unify(", s, ",", t, ")")
 
@@ -367,6 +369,7 @@ bool RobSubstitution::unify(TermSpec s, TermSpec t)
  */
 bool RobSubstitution::match(TermSpec base, TermSpec instance)
 {
+  Timer::beat();
   if(base.sameTermContent(instance)) {
     return true;
   }

@@ -134,13 +134,27 @@ static std::recursive_mutex EXIT_LOCK;
 
 static std::chrono::time_point<std::chrono::steady_clock> START_TIME;
 
+// heartbeats: BEAT_RATE beats count as a millisecond (0 if not counting beats)
+static unsigned long long BEATS = 0;
+static unsigned long long BEAT_RATE = 0;
+static unsigned long long BEAT_LIMIT = ~0ull;
+// false after disableLimitEnforcement()
+static bool ENFORCING = true;
+
 // TODO could maybe be more efficient if we special-case the no-instruction-limit case:
 // then, we could simply sleep until the time limit
 [[noreturn]] void timer_thread()
 {
-  unsigned limit = env.options->timeLimitInDeciseconds();
+  // with heartbeats, the time limit is enforced in beat(); only watch the wall limit
+  bool beating = BEAT_RATE != 0;
+  unsigned limit = beating
+    ? 10 * env.options->wallLimit()
+    : env.options->timeLimitInDeciseconds();
   while(true) {
-    if(limit && Timer::elapsedDeciseconds() >= limit) {
+    long elapsed = beating
+      ? Timer::realMilliseconds() / 100
+      : Timer::elapsedDeciseconds();
+    if(limit && elapsed >= limit) {
       limitReached(TIME_LIMIT);
     }
 
@@ -170,6 +184,19 @@ void reinitialise(bool tryInitInstructionLimiting) {
   ::new (&EXIT_LOCK) std::recursive_mutex;
 
   START_TIME = std::chrono::steady_clock::now();
+
+  BEATS = 0;
+  ENFORCING = true;
+  BEAT_RATE = env.options->heartbeats();
+  if (BEAT_RATE) {
+    unsigned limit = env.options->timeLimitInDeciseconds();
+    BEAT_LIMIT = limit ? limit * 100 * BEAT_RATE : ~0ull;
+    // the limit is enforced in beat(), and no instruction counting;
+    // the timer thread only watches the wall limit, if any
+    if (env.options->wallLimit())
+      std::thread(timer_thread).detach();
+    return;
+  }
 
 #if VAMPIRE_PERF_EXISTS // if available, (re)initialize the perf reading
   if (tryInitInstructionLimiting) {
@@ -231,12 +258,32 @@ void reinitialise(bool tryInitInstructionLimiting) {
 }
 
 void disableLimitEnforcement() {
+  ENFORCING = false;
   EXIT_LOCK.lock();
 }
 
-// return elapsed time after `START_TIME`
+bool heartbeats() { return BEAT_RATE != 0; }
+
+unsigned long long elapsedBeats() { return BEATS; }
+
+void beat(unsigned beats) {
+  BEATS += beats;
+  if (BEATS >= BEAT_LIMIT && ENFORCING)
+    limitReached(TIME_LIMIT);
+}
+
+// return real elapsed time after `START_TIME`, even with heartbeats
+long realMilliseconds() {
+  return std::chrono::duration_cast<std::chrono::milliseconds>(
+    std::chrono::steady_clock::now() - START_TIME
+  ).count();
+}
+
+// return elapsed time after `START_TIME`, or beats converted to milliseconds
 // must be thread-safe as it is called by the main process and timer_thread
 long elapsedMilliseconds() {
+  if (BEAT_RATE)
+    return BEATS / BEAT_RATE;
   return std::chrono::duration_cast<std::chrono::milliseconds>(
     std::chrono::steady_clock::now() - START_TIME
   ).count();
@@ -301,6 +348,8 @@ bool instructionCountingAvailable()
 
 bool instructionLimitingInPlace()
 {
+  if (BEAT_RATE)
+    return false;
 #if VAMPIRE_PERF_EXISTS
   return (PERF_FD >= 0);
 #else
