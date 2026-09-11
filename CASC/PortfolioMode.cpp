@@ -392,32 +392,21 @@ static fs::path proofPath(pid_t parent, pid_t child) {
   return fs::temp_directory_path() / file;
 }
 
-// where a slice writes the beats it used, so that the parent can charge it for
-// them; named after the pair of processes, as the proof file is
-static fs::path beatsPath(pid_t parent, pid_t child) {
-  std::string file = "vampire-beats-" +
-    Int::toString(parent) + "-" +
-    Int::toString(child);
-  return fs::temp_directory_path() / file;
-}
+// in a slice, the write end of the pipe on which it reports the beats it used
+// to the parent; -1 in the parent
+static int BEATS_CHANNEL = -1;
 
 /**
- * What a finished slice spent, in deciseconds, or its whole budget if it did
- * not say.
- *
- * A slice that reached its limit is stopped from inside the beat that reached
- * it and never gets to say anything, and that slice spent exactly its budget.
+ * Return what a finished slice spent in deciseconds, or its whole budget if
+ * it did not report (a slice that reached its limit does not).
  */
-static unsigned spentByChild(pid_t parent, pid_t child, unsigned budget) {
-  fs::path path = beatsPath(parent, child);
+static unsigned spentByChild(int channel, unsigned budget) {
+  char said[32] = {0};
+  ssize_t got = read(channel, said, sizeof(said) - 1);
+  close(channel);
   unsigned long long beats = 0;
-  {
-    std::ifstream input(path);
-    if (!input || !(input >> beats))
-      return budget;
-  }
-  std::error_code ignore;
-  fs::remove(path, ignore);
+  if (got <= 0 || std::sscanf(said, "%llu", &beats) != 1)
+    return budget;
   unsigned spent = beats / (100ull * env.options->heartbeats());
   // Never nothing: starting a slice costs something whatever it then does,
   // and a schedule of slices that each did nothing would otherwise be walked
@@ -442,8 +431,10 @@ std::optional<fs::path> PortfolioMode::runScheduleByBeats(Schedule schedule) {
 
   pid_t me = getpid();
   Schedule::BottomFirstIterator it(schedule);
-  // pid |-> where the slice stands in the schedule, and what it was given
-  std::map<pid_t, std::pair<unsigned, unsigned>> running;
+  // pid |-> where the slice stands in the schedule, what it was given, and
+  // what it will say it spent
+  struct Slice { unsigned index; unsigned budget; int channel; };
+  std::map<pid_t, Slice> running;
   unsigned launched = 0;
   unsigned winningSlice = std::numeric_limits<unsigned>::max();
   pid_t successful = 0;
@@ -472,33 +463,39 @@ std::optional<fs::path> PortfolioMode::runScheduleByBeats(Schedule schedule) {
       unsigned budget = getSliceTime(code);
       if (!unlimited && (!budget || budget > (unsigned)remaining))
         budget = remaining;
+      int channel[2];
+      if (pipe(channel) != 0)
+        USER_ERROR("could not open a pipe to a slice");
       pid_t process = Sys::fork();
       ASS_NEQ(process, -1);
       if(process == 0)
       {
         TIME_TRACE_NEW_ROOT("child process")
+        close(channel[0]);
+        BEATS_CHANNEL = channel[1];
         runSlice(code, budget, scheduleRepeat);
         ASSERTION_VIOLATION; // should not return
       }
-      ALWAYS(running.insert({process, {launched++, budget}}).second);
+      close(channel[1]);
+      ALWAYS(running.insert({process, {launched++, budget, channel[0]}}).second);
     }
 
     if (running.empty())
       break;
 
     auto [ process, signalled, code ] = Sys::waitForChildTermination(-1);
-    auto slice = running.at(process);
+    Slice slice = running.at(process);
     running.erase(process);
-    remaining -= spentByChild(me, process, slice.second);
+    remaining -= spentByChild(slice.channel, slice.budget);
 
     if (!signalled && !code) {
       // succeeded; the earliest such slice is the one whose proof we want
-      if (slice.first < winningSlice) {
+      if (slice.index < winningSlice) {
         if (successful) {
           std::error_code ignore;
           fs::remove(proofPath(me, successful), ignore);
         }
-        winningSlice = slice.first;
+        winningSlice = slice.index;
         successful = process;
       } else {
         std::error_code ignore;
@@ -513,7 +510,7 @@ std::optional<fs::path> PortfolioMode::runScheduleByBeats(Schedule schedule) {
       // nothing after the winner can improve on it
       bool earlier = false;
       for (auto& [pid, other] : running) {
-        if (other.first > winningSlice)
+        if (other.index > winningSlice)
           Sys::kill(pid, SIGINT);
         else
           earlier = true;
@@ -528,9 +525,9 @@ std::optional<fs::path> PortfolioMode::runScheduleByBeats(Schedule schedule) {
   for(auto& [process, slice] : running)
     Sys::waitForChildTermination(process);
   for(auto& [process, slice] : running) {
+    close(slice.channel);
     std::error_code ignore;
     fs::remove(proofPath(me, process), ignore);
-    fs::remove(beatsPath(me, process), ignore);
   }
 
   if(!successful)
@@ -801,9 +798,15 @@ void PortfolioMode::runSlice(Options& opt)
     env.statistics->terminationReason == TerminationReason::SATISFIABLE;
 
   if (env.options->heartbeats()) {
-    std::ofstream beats(beatsPath(getppid(), getpid()));
-    if (beats)
-      beats << Timer::elapsedBeats() << endl;
+    if (BEATS_CHANNEL >= 0) {
+      char said[32];
+      int length = std::snprintf(said, sizeof(said), "%llu",
+        static_cast<unsigned long long>(Timer::elapsedBeats()));
+      if (length > 0)
+        ALWAYS(write(BEATS_CHANNEL, said, length) == length);
+      close(BEATS_CHANNEL);
+      BEATS_CHANNEL = -1;
+    }
     if (outputAllowed())
       addCommentSignForSZS(cout) << "beats " << Timer::elapsedBeats()
         << " in " << Timer::realMilliseconds() << "ms" << endl;
