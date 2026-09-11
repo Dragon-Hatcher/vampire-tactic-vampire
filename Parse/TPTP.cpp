@@ -3744,8 +3744,14 @@ void TPTP::endFormula()
 
     case AND:
     case OR:
-      f = _formulas.pop();
-      f = makeJunction((Connective)con,f,_formulas.pop());
+      {
+        // The operands in the order they were read: the right one is on top of
+        // the stack and the left one under it, and a junction built the other
+        // way round is one whose arguments no longer say where they came from.
+        Formula* right = _formulas.pop();
+        Formula* left = _formulas.pop();
+        f = makeJunction((Connective)con,left,right);
+      }
       if (conReverse) {
 	f = new NegatedFormula(f);
       }
@@ -4775,6 +4781,8 @@ bool TPTP::findInterpretedPredicate(std::string name, unsigned arity) {
  */
 Formula* TPTP::makeJunction (Connective c,Formula* lhs,Formula* rhs)
 {
+
+
   if (lhs->connective() == c) {
     FormulaList* largs = lhs->args();
 
