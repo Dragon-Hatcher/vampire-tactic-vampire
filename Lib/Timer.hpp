@@ -16,6 +16,7 @@
 #ifndef __Timer__
 #define __Timer__
 
+#include <cstdint>
 #include <ostream>
 #include <string>
 
@@ -33,8 +34,17 @@ namespace Timer {
   // blocks if a resource limit was already reached and we are exiting
   void disableLimitEnforcement();
 
+  // heartbeats: the search counts the steps it takes, and elapsed time is
+  // that count divided by the beats a millisecond is taken to be worth. Bump
+  // the count; a limit reached at a beat is reached at the same beat every run
+  bool heartbeats();
+  void beat(unsigned beats = 1);
+  unsigned long long elapsedBeats();
+
   // elapsed time
   long elapsedMilliseconds();
+  // what the clock says, whatever the beats say
+  long realMilliseconds();
   inline long elapsedDeciseconds()
   { return elapsedMilliseconds() / 100; }
 

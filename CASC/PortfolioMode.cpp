@@ -33,6 +33,7 @@
 #include "Shell/TheoryFinder.hpp"
 
 #include <limits>
+#include <map>
 #include <unistd.h>
 #include <signal.h>
 #include <fstream>
@@ -58,6 +59,13 @@ using std::endl;
 namespace fs = std::filesystem;
 
 PortfolioMode::PortfolioMode(Problem* problem) : _prb(problem), _slowness(env.options->slowness()) {
+  if (env.options->heartbeats()) {
+    // How many cores this machine has is no business of a run that is meant to
+    // come out the same on the next one: how many slices to keep going is
+    // asked for rather than found.
+    _numWorkers = std::max(1u, env.options->multicore());
+    return;
+  }
   unsigned cores = std::max(1u, std::thread::hardware_concurrency());
   _numWorkers = std::min(cores, env.options->multicore());
   if(!_numWorkers) {
@@ -386,6 +394,153 @@ static fs::path proofPath(pid_t parent, pid_t child) {
   return fs::temp_directory_path() / file;
 }
 
+// where a slice writes the beats it used, so that the parent can charge it for
+// them; named after the pair of processes, as the proof file is
+static fs::path beatsPath(pid_t parent, pid_t child) {
+  std::string file = "vampire-beats-" +
+    Int::toString(parent) + "-" +
+    Int::toString(child);
+  return fs::temp_directory_path() / file;
+}
+
+/**
+ * What a finished slice spent, in deciseconds, or its whole budget if it did
+ * not say.
+ *
+ * A slice that reached its limit is stopped from inside the beat that reached
+ * it and never gets to say anything, and that slice spent exactly its budget.
+ */
+static unsigned spentByChild(pid_t parent, pid_t child, unsigned budget) {
+  fs::path path = beatsPath(parent, child);
+  unsigned long long beats = 0;
+  {
+    std::ifstream input(path);
+    if (!input || !(input >> beats))
+      return budget;
+  }
+  std::error_code ignore;
+  fs::remove(path, ignore);
+  unsigned spent = beats / (100ull * env.options->heartbeats());
+  // Never nothing: starting a slice costs something whatever it then does,
+  // and a schedule of slices that each did nothing would otherwise be walked
+  // for ever.
+  return std::max(1u, std::min(spent, budget));
+}
+
+/**
+ * Run a schedule, counting what the slices do rather than how long they take.
+ *
+ * Every slice is given the budget the schedule states, read as beats; what it
+ * does not use is left for the slices after it, so the schedule is walked as
+ * far as the problem allows rather than as far as the machine happens to get.
+ *
+ * The winner is the earliest slice of the schedule that succeeds, not the
+ * first one to finish. With a single worker those are the same thing; with
+ * more, a success means killing the slices after it and waiting for those
+ * before it, either of which may yet succeed and be preferred.
+ */
+std::optional<fs::path> PortfolioMode::runScheduleByBeats(Schedule schedule) {
+  TIME_TRACE("run schedule");
+
+  pid_t me = getpid();
+  Schedule::BottomFirstIterator it(schedule);
+  // pid |-> where the slice stands in the schedule, and what it was given
+  std::map<pid_t, std::pair<unsigned, unsigned>> running;
+  unsigned launched = 0;
+  unsigned winningSlice = std::numeric_limits<unsigned>::max();
+  pid_t winner = 0;
+  long remaining = env.options->timeLimitInDeciseconds();
+  bool unlimited = (remaining == 0);
+  bool scheduleRepeat = false;
+
+  while (running.size() || unlimited || remaining > 0) {
+    // running under capacity, and nothing better than what is running left to
+    // hope for: wake up more slices
+    while (running.size() < _numWorkers
+        && winningSlice == std::numeric_limits<unsigned>::max()
+        && (unlimited || remaining > 0)) {
+      // after exhaustion we replace the schedule
+      // by copies with x2 limits and do this forever
+      if(!it.hasNext()) {
+        Schedule next;
+        rescaleScheduleLimits(schedule, next, 2.0);
+        scheduleRepeat = true;
+        schedule = std::move(next);
+        it = Schedule::BottomFirstIterator(schedule);
+      }
+      ALWAYS(it.hasNext());
+
+      std::string code = it.next();
+      unsigned budget = getSliceTime(code);
+      if (!unlimited && (!budget || budget > (unsigned)remaining))
+        budget = remaining;
+      pid_t process = Sys::fork();
+      ASS_NEQ(process, -1);
+      if(process == 0)
+      {
+        TIME_TRACE_NEW_ROOT("child process")
+        runSlice(code, budget, scheduleRepeat);
+        ASSERTION_VIOLATION; // should not return
+      }
+      ALWAYS(running.insert({process, {launched++, budget}}).second);
+    }
+
+    if (running.empty())
+      break;
+
+    auto [ process, signalled, code ] = Sys::waitForChildTermination(-1);
+    auto slice = running.at(process);
+    running.erase(process);
+    remaining -= spentByChild(me, process, slice.second);
+
+    if (!signalled && !code) {
+      // succeeded; the earliest such slice is the one whose proof we want
+      if (slice.first < winningSlice) {
+        if (winner) {
+          std::error_code ignore;
+          fs::remove(proofPath(me, winner), ignore);
+        }
+        winningSlice = slice.first;
+        winner = process;
+      } else {
+        std::error_code ignore;
+        fs::remove(proofPath(me, process), ignore);
+      }
+    } else if (signalled) {
+      Shell::addCommentSignForSZS(cout);
+      cout<<"Child killed by signal " << code << endl;
+    }
+
+    if (winningSlice != std::numeric_limits<unsigned>::max()) {
+      // nothing after the winner can improve on it
+      bool earlier = false;
+      for (auto& [pid, other] : running) {
+        if (other.first > winningSlice)
+          Sys::kill(pid, SIGINT);
+        else
+          earlier = true;
+      }
+      if (!earlier)
+        break;
+    }
+  }
+
+  for(auto& [process, slice] : running)
+    Sys::kill(process, SIGINT);
+  for(auto& [process, slice] : running)
+    Sys::waitForChildTermination(process);
+  for(auto& [process, slice] : running) {
+    std::error_code ignore;
+    fs::remove(proofPath(me, process), ignore);
+    fs::remove(beatsPath(me, process), ignore);
+  }
+
+  if(!winner)
+    return {};
+
+  return proofPath(me, winner);
+}
+
 std::optional<fs::path> PortfolioMode::runSchedule(Schedule schedule) {
   TIME_TRACE("run schedule");
 
@@ -481,7 +636,9 @@ bool PortfolioMode::runScheduleAndRecoverProof(Schedule schedule)
 
   UIHelper::portfolioParent = true; // to report on overall-solving-ended in Timer.cpp
 
-  auto result = runSchedule(std::move(schedule));
+  auto result = env.options->heartbeats()
+    ? runScheduleByBeats(std::move(schedule))
+    : runSchedule(std::move(schedule));
   if(!result)
     return false;
 
@@ -584,7 +741,14 @@ void PortfolioMode::runSlice(std::string sliceCode, int timeLimitInDeciseconds, 
 
     // opt.randomSeed() would normally be inherited from the parent
     // addCommentSignForSZS(cout) << "runSlice - seed before setting: " << opt.randomSeed() << endl;
-    if (env.options->randomizeSeedForPortfolioWorkers()) {
+    if (env.options->heartbeats()) {
+      // Each slice still wants a seed of its own -- two slices that differ
+      // only in what they draw would otherwise do the same thing -- but it has
+      // to be the same seed on the next run, so it is taken from the slice
+      // itself rather than from a random device.
+      opt.setRandomSeed(2 + DefaultHash::hash(sliceCode) % 1000000);
+      // ... unless a strategy sets a seed explicitly, just below
+    } else if (env.options->randomizeSeedForPortfolioWorkers()) {
       // but here we want each worker to have their own seed
       opt.setRandomSeed(std::random_device()());
       // ... unless a strategy sets a seed explicitly, just below
@@ -640,6 +804,15 @@ void PortfolioMode::runSlice(Options& opt)
   bool succeeded =
     env.statistics->terminationReason == TerminationReason::REFUTATION ||
     env.statistics->terminationReason == TerminationReason::SATISFIABLE;
+
+  if (env.options->heartbeats()) {
+    std::ofstream beats(beatsPath(getppid(), getpid()));
+    if (beats)
+      beats << Timer::elapsedBeats() << endl;
+    if (outputAllowed())
+      addCommentSignForSZS(cout) << "beats " << Timer::elapsedBeats()
+        << " in " << Timer::realMilliseconds() << "ms" << endl;
+  }
 
   if(!succeeded) {
     if(outputAllowed())

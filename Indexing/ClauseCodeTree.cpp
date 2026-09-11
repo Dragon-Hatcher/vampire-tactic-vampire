@@ -14,6 +14,7 @@
 
 #include <utility>
 
+#include "Lib/Timer.hpp"
 #include "Debug/RuntimeStatistics.hpp"
 
 #include "Lib/Comparison.hpp"
@@ -549,6 +550,11 @@ Clause* ClauseCodeTree::ClauseMatcher::next(int& resolvedQueryLit)
   }
 
   for(;;) {
+    // A step of the matcher is a good deal cheaper than a unification, so it
+    // takes several of them to be worth a beat.
+    static unsigned steps = 0;
+    if (!(++steps % 16))
+      Timer::beat();
     LiteralMatcher* lm = &*lms.top();
 
     //get next literal from the literal matcher
@@ -855,6 +861,12 @@ bool ClauseCodeTree::ClauseMatcher::matchGlobalVars(int& resolvedQueryLit)
 
 bool ClauseCodeTree::ClauseMatcher::compatible(ILStruct* bi, MatchInfo* bq, ILStruct* ni, MatchInfo* nq)
 {
+  // Subsumption tries every way the literals could be paired up, and this is
+  // the innermost thing it does: cheap on its own, and the whole of a
+  // strategy's work when there are many pairings to try.
+  static unsigned pairs = 0;
+  if (!(++pairs % 128))
+    Timer::beat();
   if( lInfos[bq->liIndex].litIndex==lInfos[nq->liIndex].litIndex ||
       (lInfos[bq->liIndex].opposite && lInfos[nq->liIndex].opposite) ) {
     return false;

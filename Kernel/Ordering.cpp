@@ -14,6 +14,7 @@
 
 #include <fstream>
 
+#include "Lib/Timer.hpp"
 #include "Debug/Assertion.hpp"
 #include "Forwards.hpp"
 
@@ -258,6 +259,7 @@ TermOrderingDiagramUP Ordering::createTermOrderingDiagram(bool ground) const
 
 Ordering::Result PrecedenceOrdering::compare(Literal* l1, Literal* l2) const
 {
+  Timer::beat();
   ASS(l1->shared());
   ASS(l2->shared());
 

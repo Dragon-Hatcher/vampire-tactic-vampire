@@ -12,6 +12,7 @@
  * Implements class MinisatInterfacing
  */
 
+#include "Lib/Timer.hpp"
 #include "Shell/Options.hpp"
 
 #include "MinisatInterfacing.hpp"
@@ -58,7 +59,12 @@ Status MinisatInterfacing<MinisatSolver>::solveUnderAssumptionsLimited(const SAT
     _assumptions.push(vampireLit2Minisat(it.next()));
   }
 
+  uint64_t before = _solver.propagations;
   solveModuloAssumptionsAndSetStatus(conflictCountLimit);
+  // What the solver did, not that it was called: AVATAR asks for a model after
+  // every batch of clauses, and one of those calls can be the whole of a
+  // strategy's work. A beat is worth a few dozen propagations.
+  Timer::beat(1 + (_solver.propagations - before) / 32);
   return _status;
 }
 

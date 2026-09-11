@@ -14,6 +14,7 @@
  */
 
 
+#include "Lib/Timer.hpp"
 #include "Kernel/OperatorType.hpp"
 #include "Kernel/Clause.hpp"
 #include "Kernel/Formula.hpp"
@@ -83,6 +84,7 @@ void NewCNF::clausify(FormulaUnit* unit,Stack<Clause*>& output, Substitution* su
     Formula* g;
     Occurrences occurrences;
     dequeue(g, occurrences);
+    Timer::beat();
 
 #if LOGGING
     cout << std::endl << "---------------------------------------------" << std::endl;

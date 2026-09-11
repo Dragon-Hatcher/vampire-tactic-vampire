@@ -1999,6 +1999,8 @@ public:
   std::string inputFile() const { return _inputFile.actualValue; }
   void resetInputFile() { _inputFile.actualValue = ""; }
   int activationLimit() const { return _activationLimit.actualValue; }
+  unsigned heartbeats() const { return _heartbeats.actualValue; }
+  unsigned wallLimit() const { return _wallLimit.actualValue; }
   unsigned randomSeed() const { return _randomSeed.actualValue; }
   void setRandomSeed(unsigned seed) { _randomSeed.actualValue = seed; }
   const std::string& strategySamplerFilename() const { return _sampleStrategy.actualValue; }
@@ -2139,9 +2141,9 @@ public:
   size_t memoryLimit() const { return _memoryLimit.actualValue; }
   void setMemoryLimitOptionValue(size_t newVal) { _memoryLimit.actualValue = newVal; }
 #if VAMPIRE_PERF_EXISTS
-  unsigned instructionLimit() const { return _instructionLimit.actualValue; }
+  unsigned instructionLimit() const { return _heartbeats.actualValue ? 0 : _instructionLimit.actualValue; }
   void setInstructionLimit(unsigned newVal) { _instructionLimit.actualValue = newVal; }
-  unsigned simulatedInstructionLimit() const { return _simulatedInstructionLimit.actualValue; }
+  unsigned simulatedInstructionLimit() const { return _heartbeats.actualValue ? 0 : _simulatedInstructionLimit.actualValue; }
   unsigned setSimulatedInstructionLimit() const { return _simulatedInstructionLimit.actualValue; }
   bool parsingDoesNotCount() const { return _parsingDoesNotCount.actualValue; }
 #endif
@@ -2615,6 +2617,8 @@ private:
   StringOptionValue _sampleStrategy;
 
   IntOptionValue _activationLimit;
+  UnsignedOptionValue _heartbeats;
+  UnsignedOptionValue _wallLimit;
 
   ChoiceOptionValue<SatSolver> _satSolver;
   ChoiceOptionValue<SaturationAlgorithm> _saturationAlgorithm;

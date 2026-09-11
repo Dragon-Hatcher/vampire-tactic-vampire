@@ -88,8 +88,12 @@ void ProvingHelper::runVampire(Problem& prb, const Options& opt)
   // cf getPreprocessedProblem in vampire.cpp
   if (opt.randomSeed() != 0) {
     Lib::Random::setSeed(opt.randomSeed());
-  } else {
+  } else if (!opt.heartbeats()) {
     Lib::Random::resetSeed();
+  } else {
+    // A run that counts its beats is one that is meant to be repeatable, and
+    // asking a random device would be the end of that.
+    Lib::Random::setSeed(1);
   }
 
   try

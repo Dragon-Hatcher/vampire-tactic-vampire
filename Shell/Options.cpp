@@ -213,6 +213,16 @@ void Options::init()
     _slowness.onlyUsefulWith(UsingPortfolioTechnology());
     _slowness.tag(OptionTag::PORTFOLIO);
 
+    _heartbeats = UnsignedOptionValue("heartbeats","hb",0);
+    _heartbeats.description="Beats per simulated millisecond: with this set, the search counts the steps it takes rather than reading the clock, and every limit is measured in those beats. A run then does not depend on how fast the machine is or on what else it is doing, at the price of the count being only roughly what a millisecond costs. 0 leaves the clock as it is.";
+    _lookup.insert(&_heartbeats);
+    _heartbeats.tag(OptionTag::PORTFOLIO);
+
+    _wallLimit = UnsignedOptionValue("wall_limit","wl",0);
+    _wallLimit.description="Seconds of real time after which to give up, whatever the beats say. Beats stand in for time only as well as they are counted, and a strategy that finds a loop nobody thought to count would otherwise run for ever; reaching this limit is a run that was not reproducible, and says so. 0 leaves it to the beats.";
+    _lookup.insert(&_wallLimit);
+    _wallLimit.tag(OptionTag::PORTFOLIO);
+
     _randomizeSeedForPortfolioWorkers = BoolOptionValue("randomize_seed_for_portfolio_workers","",true);
     _randomizeSeedForPortfolioWorkers.description = "In portfolio mode, let each worker process start from its own independent random seed.";
     _lookup.insert(&_randomizeSeedForPortfolioWorkers);

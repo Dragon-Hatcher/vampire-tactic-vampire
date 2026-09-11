@@ -1636,6 +1636,7 @@ MainLoopResult FiniteModelBuilder::runImpl()
       if (_opt.randomTraversals()) {
         _solver->randomizeForNextAssignment(_curMaxVar);
       }
+      Timer::beat();
       satResult = _solver->solveUnderAssumptions(assumptions);
       env.statistics->phase = ExecutionPhase::FMB_CONSTRAINT_GEN;
     }

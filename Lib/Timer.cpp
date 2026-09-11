@@ -114,13 +114,32 @@ static std::recursive_mutex EXIT_LOCK;
 
 static std::chrono::time_point<std::chrono::steady_clock> START_TIME;
 
+// What the search has counted, and what it counts in: `BEAT_RATE` beats are
+// taken to be a millisecond, so a limit stated in time is a limit on the
+// count. Zero leaves the clock to the clock.
+static unsigned long long BEATS = 0;
+static unsigned long long BEAT_RATE = 0;
+static unsigned long long BEAT_LIMIT = ~0ull;
+// Whether reaching a limit still ends the process: a proof having been found,
+// it does not, and the search may well beat on for a while yet.
+static bool ENFORCING = true;
+
 // TODO could maybe be more efficient if we special-case the no-instruction-limit case:
 // then, we could simply sleep until the time limit
 [[noreturn]] void timer_thread()
 {
-  unsigned limit = env.options->timeLimitInDeciseconds();
+  // With beats the limit is reached at a beat, and all this thread is left to
+  // watch for is the ceiling on real time -- which a run that beats as it
+  // should never comes near.
+  bool beating = BEAT_RATE != 0;
+  unsigned limit = beating
+    ? 10 * env.options->wallLimit()
+    : env.options->timeLimitInDeciseconds();
   while(true) {
-    if(limit && Timer::elapsedDeciseconds() >= limit) {
+    long elapsed = beating
+      ? Timer::realMilliseconds() / 100
+      : Timer::elapsedDeciseconds();
+    if(limit && elapsed >= limit) {
       limitReached(TIME_LIMIT);
     }
 
@@ -150,6 +169,21 @@ void reinitialise(bool tryInitInstructionLimiting) {
   ::new (&EXIT_LOCK) std::recursive_mutex;
 
   START_TIME = std::chrono::steady_clock::now();
+
+  BEATS = 0;
+  ENFORCING = true;
+  BEAT_RATE = env.options->heartbeats();
+  if (BEAT_RATE) {
+    unsigned limit = env.options->timeLimitInDeciseconds();
+    BEAT_LIMIT = limit ? limit * 100 * BEAT_RATE : ~0ull;
+    // What ends a run is a beat, which the search reaches at a point of its
+    // own rather than wherever it happened to be when a tick fell; no perf
+    // counter either, instructions being no more reproducible than time is.
+    // The thread is left to watch for the ceiling, if there is one.
+    if (env.options->wallLimit())
+      std::thread(timer_thread).detach();
+    return;
+  }
 
 #if VAMPIRE_PERF_EXISTS // if available, (re)initialize the perf reading
   if (tryInitInstructionLimiting) {
@@ -192,12 +226,32 @@ void reinitialise(bool tryInitInstructionLimiting) {
 }
 
 void disableLimitEnforcement() {
+  ENFORCING = false;
   EXIT_LOCK.lock();
 }
 
-// return elapsed time after `START_TIME`
+bool heartbeats() { return BEAT_RATE != 0; }
+
+unsigned long long elapsedBeats() { return BEATS; }
+
+void beat(unsigned beats) {
+  BEATS += beats;
+  if (BEATS >= BEAT_LIMIT && ENFORCING)
+    limitReached(TIME_LIMIT);
+}
+
+// what the clock says, whatever the beats say
+long realMilliseconds() {
+  return std::chrono::duration_cast<std::chrono::milliseconds>(
+    std::chrono::steady_clock::now() - START_TIME
+  ).count();
+}
+
+// return elapsed time after `START_TIME`, or what the beats make of it
 // must be thread-safe as it is called by the main process and timer_thread
 long elapsedMilliseconds() {
+  if (BEAT_RATE)
+    return BEATS / BEAT_RATE;
   return std::chrono::duration_cast<std::chrono::milliseconds>(
     std::chrono::steady_clock::now() - START_TIME
   ).count();
@@ -241,6 +295,8 @@ std::string msToSecondsString(int ms)
 
 bool instructionLimitingInPlace()
 {
+  if (BEAT_RATE)
+    return false;
 #if VAMPIRE_PERF_EXISTS
   return (PERF_FD >= 0);
 #else

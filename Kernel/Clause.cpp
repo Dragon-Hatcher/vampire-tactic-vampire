@@ -16,6 +16,7 @@
 
 #include <ostream>
 
+#include "Lib/Timer.hpp"
 #include "Debug/RuntimeStatistics.hpp"
 
 #include "Lib/Allocator.hpp"
@@ -90,6 +91,7 @@ Clause::Clause(Literal* const* lits, unsigned length, Inference inf)
  */
 void* Clause::operator new(size_t sz, unsigned lits)
 {
+  Timer::beat();
   ASS_EQ(sz,sizeof(Clause));
 
   RSTAT_CTR_INC("clauses created");

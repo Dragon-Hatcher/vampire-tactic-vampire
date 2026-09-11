@@ -12,6 +12,7 @@
  * Implements class CadicalInterfacing
  */
 
+#include "Lib/Timer.hpp"
 #include "cadical/src/tracer.hpp"
 
 #include "CadicalInterfacing.hpp"
@@ -37,6 +38,7 @@ CadicalInterfacing::CadicalInterfacing()
 
 Status CadicalInterfacing::solveUnderAssumptionsLimited(const SATLiteralStack& assumps, unsigned conflictCountLimit)
 {
+  Timer::beat();
   // load assumptions:
   SATLiteralStack::ConstIterator it(assumps);
   _assumptions.clear();

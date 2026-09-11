@@ -95,8 +95,12 @@ Problem* preprocessProblem(Problem* prb)
   // cf ProvingHelper::runVampire
   if (env.options->randomSeed() != 0) {
     Lib::Random::setSeed(env.options->randomSeed());
-  } else {
+  } else if (!env.options->heartbeats()) {
     Lib::Random::resetSeed();
+  } else {
+    // A run that counts its beats is one that is meant to be repeatable, and
+    // asking a random device would be the end of that.
+    Lib::Random::setSeed(1);
   }
 
   TIME_TRACE(TimeTrace::PREPROCESSING);

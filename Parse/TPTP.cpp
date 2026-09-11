@@ -16,6 +16,7 @@
 
 #include <fstream>
 
+#include "Lib/Timer.hpp"
 #include "Debug/Assertion.hpp"
 
 #include "Lib/Int.hpp"
@@ -4046,6 +4047,7 @@ void TPTP::endFof()
   default:
     break;
   }
+  Timer::beat();
   _units.pushBack(unit);
 } // tag
 

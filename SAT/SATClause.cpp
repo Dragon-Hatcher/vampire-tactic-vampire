@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <ostream>
 
+#include "Lib/Timer.hpp"
 #include "Lib/Allocator.hpp"
 #include "Lib/Environment.hpp"
 
@@ -37,6 +38,7 @@ unsigned SATClause::_lastNumber = 0;
  */
 void* SATClause::operator new(size_t sz,unsigned lits)
 {
+  Timer::beat();
   //We have to get sizeof(SATClause) + (_length-1)*sizeof(SATLiteral*)
   //this way, because _length-1 wouldn't behave well for
   //_length==0 on x64 platform.
