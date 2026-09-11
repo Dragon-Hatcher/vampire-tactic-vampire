@@ -213,6 +213,11 @@ void Options::init()
     _slowness.onlyUsefulWith(UsingPortfolioTechnology());
     _slowness.tag(OptionTag::PORTFOLIO);
 
+    _strategy = StringOptionValue("strategy","strat","");
+    _strategy.description="A strategy to run instead of a schedule, in the form the portfolio prints and `decode` reads. What the portfolio does otherwise -- normalising the problem, running the strategy in a process of its own -- it still does, so this is the same run as the one the strategy won, without the strategies before it.";
+    _lookup.insert(&_strategy);
+    _strategy.tag(OptionTag::PORTFOLIO);
+
     _heartbeats = UnsignedOptionValue("heartbeats","hb",0);
     _heartbeats.description="Beats per simulated millisecond: with this set, the search counts the steps it takes rather than reading the clock, and every limit is measured in those beats. A run then does not depend on how fast the machine is or on what else it is doing, at the price of the count being only roughly what a millisecond costs. 0 leaves the clock as it is.";
     _lookup.insert(&_heartbeats);
@@ -3556,6 +3561,9 @@ std::string Options::generateEncodedOptions() const
     forbidden.insert(&_randomizeSeedForPortfolioWorkers);
     forbidden.insert(&_schedule);
     forbidden.insert(&_scheduleFile);
+    // A strategy states what to run, not how to run: were it in here, the
+    // strategy a run reports would hold the one it was asked for.
+    forbidden.insert(&_strategy);
 
     forbidden.insert(&_memoryLimit);
     forbidden.insert(&_proof);

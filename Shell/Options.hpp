@@ -1999,6 +1999,7 @@ public:
   std::string inputFile() const { return _inputFile.actualValue; }
   void resetInputFile() { _inputFile.actualValue = ""; }
   int activationLimit() const { return _activationLimit.actualValue; }
+  const std::string& strategy() const { return _strategy.actualValue; }
   unsigned heartbeats() const { return _heartbeats.actualValue; }
   unsigned wallLimit() const { return _wallLimit.actualValue; }
   unsigned randomSeed() const { return _randomSeed.actualValue; }
@@ -2617,6 +2618,7 @@ private:
   StringOptionValue _sampleStrategy;
 
   IntOptionValue _activationLimit;
+  StringOptionValue _strategy;
   UnsignedOptionValue _heartbeats;
   UnsignedOptionValue _wallLimit;
 
