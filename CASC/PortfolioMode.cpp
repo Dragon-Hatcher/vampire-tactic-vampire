@@ -314,6 +314,12 @@ void PortfolioMode::addScheduleExtra(const Schedule& sOld, Schedule& sNew, std::
 
 void PortfolioMode::getSchedules(const Property& prop, Schedule& quick, Schedule& champions)
 {
+  // a strategy given explicitly is the whole schedule
+  if (!env.options->strategy().empty()) {
+    quick.push(env.options->strategy());
+    return;
+  }
+
   switch(env.options->schedule()) {
   case Options::Schedule::FILE:
     Schedules::getScheduleFromFile(env.options->scheduleFile(), quick);
