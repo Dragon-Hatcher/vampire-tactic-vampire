@@ -1432,6 +1432,20 @@ void Options::init()
             , equal(UnificationWithAbstraction::ALASCA_ONE_INTERP)
             , equal(UnificationWithAbstraction::AUTO)
             )));
+    // ... and the other way round, which is not a recommendation but a
+    // requirement: an ALASCA abstraction defers what it cannot unify into
+    // constraint literals, and only the ALASCA calculus puts them into the
+    // conclusion. Without it they are dropped, and an inference concludes as
+    // though the terms had been unified when they were not -- vampire's
+    // https://github.com/vprover/vampire/issues/938. The proofs it derives
+    // that way are unsound, so a strategy asking for one without the other
+    // asks for nothing that can be believed.
+    _unificationWithAbstraction.addHardConstraint(
+        If(Or(equal(UnificationWithAbstraction::ALASCA_CAN_ABSTRACT)
+            , equal(UnificationWithAbstraction::ALASCA_MAIN)
+            , equal(UnificationWithAbstraction::ALASCA_MAIN_FLOOR)
+            , equal(UnificationWithAbstraction::ALASCA_ONE_INTERP)
+            )).then(_alasca.is(equal(true))));
 
     _viras  = BoolOptionValue("virtual_integer_real_arithmetic_substitution","viras",true);
     _viras.description= "Enables the VIRAS quantifier elimination to be used in ALASCA. The VIRAS method is explained in the LPAR2024 paper \"VIRAS: Conflict-Driven Quantifier Elimination for Integer-Real Arithmetic\"\n";

@@ -14,6 +14,8 @@
 #include "Lib/IntUnionFind.hpp"
 #include "Kernel/Ordering.hpp"
 #include "Kernel/PolynomialBottomUpEvaluation.hpp"
+#include "Kernel/InferenceStore.hpp"
+#include "Kernel/Substitution.hpp"
 
 #define DEBUG(...) // DBG(__VA_ARGS__)
 
@@ -75,8 +77,16 @@ static const auto iterVars = [](Clause* cl) {
         { return subterm.template as<Variable>().toOwned(); });
 };
 
+/**
+ * @b witness is the substitution the generalization's soundness rests on:
+ * applying it to the premise gives the conclusion back. Each of the rules
+ * names its own in the comment above it. It is recorded against the
+ * conclusion, since a proof otherwise says only that the step generalized
+ * something, and anything replaying it would have to work out what.
+ */
 template<class EvalFn>
-SimplifyingGeneratingInference1::Result generalizeBottomUp(Clause* cl, EvalFn eval) 
+SimplifyingGeneratingInference1::Result generalizeBottomUp(Clause* cl, EvalFn eval,
+    Substitution const* witness = nullptr)
 {
   /* apply the selectedGen generalization */
   DEBUG_CODE(bool anyChange = false);
@@ -131,8 +141,13 @@ SimplifyingGeneratingInference1::Result generalizeBottomUp(Clause* cl, EvalFn ev
 
   ASS(anyChange)
   Inference inf(SimplifyingInference1(Kernel::InferenceRule::ARITHMETIC_SUBTERM_GENERALIZATION, cl));
+  Clause* simplified = Clause::fromStack(stack, inf);
+  if (witness) {
+    InferenceStore::instance()->recordPremiseUse(simplified, cl, nullptr,
+      TermList::empty(), 0, *witness);
+  }
   return SimplifyingGeneratingInference1::Result{
-    .simplified = Clause::fromStack(stack, inf), 
+    .simplified = simplified,
     .premiseRedundant = (allLessEq && oneLess)
   };
 }

@@ -18,6 +18,9 @@
 
 #include "Kernel/Term.hpp"
 #include "Kernel/Clause.hpp"
+#include "Kernel/InferenceStore.hpp"
+#include "Kernel/Substitution.hpp"
+#include "Lib/DHSet.hpp"
 #include "Kernel/MLMatcher.hpp"
 #include "Kernel/Inference.hpp"
 #include "Kernel/RobSubstitution.hpp"
@@ -122,7 +125,21 @@ Clause* Condensation::simplify(Clause* cl)
       }
 
       if(success) {
-        return Clause::fromArray(newLits.begin(), newLen, SimplifyingInference1(InferenceRule::CONDENSATION, cl));
+        Clause* res = Clause::fromArray(newLits.begin(), newLen, SimplifyingInference1(InferenceRule::CONDENSATION, cl));
+        // The conclusion is the premise at the unifier of two of its literals,
+        // which the inference then discards. A clause is universally
+        // quantified, so an instance of it follows from it, and which instance
+        // it is is the whole of what the step did.
+        {
+          Substitution s;
+          DHSet<unsigned, FnvHash, IdentityHash> vars;
+          cl->collectVars(vars);
+          for (unsigned v : iterTraits(vars.iterator()))
+            s.bindUnbound(v, subst->apply(TermList(v, false), 0));
+          InferenceStore::instance()->recordPremiseUse(res, cl, nullptr,
+            TermList::empty(), 0, s);
+        }
+        return res;
       }
     }
   }

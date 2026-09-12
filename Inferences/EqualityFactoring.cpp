@@ -20,6 +20,9 @@
 #include "Lib/VirtualIterator.hpp"
 
 #include "Kernel/Clause.hpp"
+#include "Kernel/InferenceStore.hpp"
+#include "Kernel/Substitution.hpp"
+#include "Lib/DHSet.hpp"
 #include "Kernel/EqHelper.hpp"
 #include "Kernel/Inference.hpp"
 #include "Kernel/Ordering.hpp"
@@ -152,9 +155,27 @@ struct EqualityFactoring::ResultFn
       }
     }
 
+    unsigned firstConstraint = resLits->size();
+    unsigned numConstraints = constraints->size();
     resLits->loadFromIterator(constraints->iterFifo());
 
     Clause *cl = Clause::fromStack(*resLits, GeneratingInference1(InferenceRule::EQUALITY_FACTORING, _cl));
+    InferenceStore::instance()->recordConstraints(cl, firstConstraint,
+      numConstraints);
+    // The rule factors one equality of the premise against another and keeps
+    // the unifier of the two sides it was applied to. Two uses of the one
+    // premise: the selected equality with the side of it that was unified,
+    // then the other equality with its own. Neither survives the inference,
+    // and which literals they were is what replaying the step turns on.
+    {
+      Substitution s;
+      DHSet<unsigned, FnvHash, IdentityHash> vars;
+      _cl->collectVars(vars);
+      for (unsigned v : iterTraits(vars.iterator()))
+        s.bindUnbound(v, absUnif.subs().apply(TermList(v, false), 0));
+      InferenceStore::instance()->recordPremiseUse(cl, _cl, sLit, sLHS, 0, s);
+      InferenceStore::instance()->recordPremiseUse(cl, _cl, fLit, fLHS, 0, s);
+    }
     if(env.options->proofExtra() == Options::ProofExtra::FULL)
       env.proofExtra.insert(cl, new EqualityFactoringExtra(sLit, fLit, sLHS, fRHS));
     return cl;

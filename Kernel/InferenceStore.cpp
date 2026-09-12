@@ -109,7 +109,8 @@ void InferenceStore::recordPremiseUse(Unit* generated, Unit* premise,
 {
   Stack<PremiseUse>* uses;
   _premiseUses.getValuePtr(generated->number(), uses);
-  uses->push({premise->number(), literal, term, flags, bindings});
+  uses->push({premise->number(), literal, nullptr, nullptr, term, flags,
+    bindings});
 }
 
 void InferenceStore::recordPremiseUse(Unit* generated, Clause* premise,
@@ -131,6 +132,11 @@ void InferenceStore::recordPremiseUse(Unit* generated, Clause* premise,
     }
   }
   recordPremiseUse(generated, premise, literal, term, flags, bindings);
+  // The index is worked out again when the clause is done with; see PremiseUse.
+  Stack<PremiseUse>* uses;
+  _premiseUses.getValuePtr(generated->number(), uses);
+  uses->top().premiseClause = premise;
+  uses->top().on = on;
 }
 
 void InferenceStore::recoverSubsumptionResolutionUses(Unit* u)
@@ -186,6 +192,21 @@ void InferenceStore::recoverSubsumptionResolutionUses(Unit* u)
   // itself, less one literal, so it keeps its variables.
   recordPremiseUse(u, main, removed, TermList::empty(), 0, Substitution());
   recordPremiseUse(u, side, nullptr, TermList::empty(), 0, subst);
+}
+
+void InferenceStore::recordConstraints(Unit* generated, unsigned first,
+  unsigned count)
+{
+  if (count)
+    _constraints.set(generated->number(), {first, count});
+}
+
+std::pair<unsigned, unsigned> InferenceStore::constraints(Unit* u) const
+{
+  std::pair<unsigned, unsigned> found;
+  if (_constraints.find(u->number(), found))
+    return found;
+  return {0, 0};
 }
 
 const Stack<InferenceStore::PremiseUse>* InferenceStore::premiseUses(Unit* u) const

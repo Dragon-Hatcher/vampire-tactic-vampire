@@ -222,6 +222,15 @@ struct Generalize
   }
 };
 
+/** binds the variable of @b factor to one, whatever power it stood in */
+template<class NumTraits>
+void bindOne(Substitution& out, MonomFactor<NumTraits> const& factor)
+{
+  auto var = factor.term.template as<Variable>();
+  ASS(var.isSome())
+  out.bind(var.unwrap().id(), NumTraits::one());
+}
+
 /** 
  * applies the rule
  */ 
@@ -284,7 +293,13 @@ SimplifyingGeneratingInference1::Result applyRule(Clause* cl, bool doOrderingChe
   } else {
     std::sort(remove.begin(), remove.end());
     Generalize gen { remove, doOrderingCheck };
-    return generalizeBottomUp(cl, EvaluateMonom<Generalize> {gen});
+    /* the substitution the rule is sound by: every variable it multiplies the
+     * one it keeps by becomes one, whatever power it stood in */
+    Substitution witness;
+    for (auto const& factor : remove) {
+      factor.apply([&](auto const& f) { bindOne(witness, f); });
+    }
+    return generalizeBottomUp(cl, EvaluateMonom<Generalize> {gen}, &witness);
   }
 }
 

@@ -101,6 +101,18 @@ public:
     /** Index of the literal acted on, or `literalNone` if none was. */
     unsigned literal;
     /**
+     * The literal acted on, and the clause it belongs to, when the inference
+     * named one.
+     *
+     * Literal selection permutes a clause's literals in place, bringing the
+     * selected ones to the front, so the index an inference saw is not the
+     * index the clause ends up with. The literal itself does not move, so it
+     * is kept and the index worked out again once nothing more will happen to
+     * the clause.
+     */
+    Clause* premiseClause = nullptr;
+    Literal* on = nullptr;
+    /**
      * The term the inference acted on within that literal, empty if none.
      *
      * A rewriting inference singles out a term rather than a whole literal:
@@ -137,6 +149,22 @@ public:
 
   /** How @b u used each of its premises, empty when nothing was recorded. */
   const Stack<PremiseUse>* premiseUses(Unit* u) const;
+
+  /**
+   * Which of a generated clause's literals are the unification constraints an
+   * abstracting unifier left behind.
+   *
+   * Under unification with abstraction the substitution does not make the two
+   * terms one: what it could not unify it defers into disequality literals the
+   * inference puts into its conclusion. The step is sound because the
+   * conclusion failing makes each of those pairs equal, and then the two terms
+   * really are one; without knowing which literals they are, nothing replaying
+   * the step could tell them from the ones it carried over.
+   */
+  void recordConstraints(Unit* generated, unsigned first, unsigned count);
+
+  /** `{first, count}` of @b u's constraint literals, `{0, 0}` if none. */
+  std::pair<unsigned, unsigned> constraints(Unit* u) const;
 
   /**
    * Works out how a subsumption resolution step used its premises, and records
@@ -281,6 +309,7 @@ private:
 
   // generated unit id -> how it used each premise
   DHMap<unsigned,Stack<PremiseUse>, FnvHash, IdentityHash> _premiseUses;
+  DHMap<unsigned,std::pair<unsigned,unsigned>, FnvHash, IdentityHash> _constraints;
 };
 
 };

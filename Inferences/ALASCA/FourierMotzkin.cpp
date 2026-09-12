@@ -14,6 +14,8 @@
 
 #include "FourierMotzkin.hpp"
 #include "Debug/TimeProfiling.hpp"
+#include "Kernel/InferenceStore.hpp"
+#include "Kernel/Substitution.hpp"
 
 #define DEBUG_FM(lvl, ...) if (lvl <= 0) DBG(__VA_ARGS__)
 
@@ -165,7 +167,27 @@ Option<Clause*> FourierMotzkinConf::applyRule_(
     out.loadFromIterator(cnst->iterFifo());
 
     Inference inf(GeneratingInference2(Kernel::InferenceRule::ALASCA_FOURIER_MOTZKIN, lhs.clause(), rhs.clause()));
+    unsigned firstConstraint = out.size() - cnst->size();
     auto cl = Clause::fromStack(out, inf);
+    // What the inference did to each premise. Its two premises live in
+    // different variable banks, so which variable of the conclusion answers to
+    // which of a premise is the unifier's to say and nothing else's; and the
+    // pairs it could not unify are the literals at the end.
+    {
+      auto record = [&](Clause* premise, unsigned bank, Literal* on) {
+        Substitution s;
+        DHSet<unsigned, FnvHash, IdentityHash> vars;
+        premise->collectVars(vars);
+        for (unsigned v : iterTraits(vars.iterator()))
+          s.bindUnbound(v, uwa.subs().apply(TermList(v, false), bank));
+        InferenceStore::instance()->recordPremiseUse(cl, premise, on,
+          TermList::empty(), 0, s);
+      };
+      record(lhs.clause(), lhsVarBank, lhs.literal());
+      record(rhs.clause(), rhsVarBank, rhs.literal());
+      InferenceStore::instance()->recordConstraints(cl, firstConstraint,
+        cnst->size());
+    }
     DEBUG_FM(1, "out: ", *cl);
     return Option<Clause*>(cl);
   });

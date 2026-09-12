@@ -76,8 +76,12 @@ Clause* unifierToClause(Clause* cl, Literal* lit, AbstractingUnifier* unif, cons
   }
 
   auto constraints = unif->computeConstraintLiterals();
+  unsigned firstConstraint = resLits->size();
+  unsigned numConstraints = constraints->size();
   resLits->loadFromIterator(constraints->iterFifo());
   auto res = Clause::fromStack(*resLits, GeneratingInference1(InferenceRule::EQUALITY_RESOLUTION, cl));
+  InferenceStore::instance()->recordConstraints(res, firstConstraint,
+    numConstraints);
   if(env.options->proofExtra() == Options::ProofExtra::FULL)
     env.proofExtra.insert(res, new EqualityResolutionExtra(lit));
   // The unifier that makes the two sides of the inequality one term, which the

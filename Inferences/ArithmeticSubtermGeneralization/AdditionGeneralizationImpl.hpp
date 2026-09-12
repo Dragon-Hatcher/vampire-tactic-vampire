@@ -191,6 +191,17 @@ struct Generalize
 };
 
 
+/** binds @b var to `var - d`, the substitution the rule is sound by */
+template<class NumTraits>
+void bindInverse(Substitution& out, Variable var, MonomSet<NumTraits> const& gen)
+{
+  TermList witness = TermList::var(var.id());
+  for (auto const& monom : gen.summands()) {
+    witness = NumTraits::add(witness, NumTraits::minus(monom.denormalize()));
+  }
+  out.bindUnbound(var.id(), witness);
+}
+
 struct IsBot 
 {
   template<class C>
@@ -226,7 +237,9 @@ SimplifyingGeneratingInference1::Result applyRule(Clause* cl, bool doOrderingChe
     auto& e = selected.unwrap();
     DEBUG("selected generalization: ", e.key(), " ", e.value());
     Generalize gen { e.key(), e.value(), doOrderingCheck };
-    return generalizeBottomUp(cl, EvaluatePolynom<Generalize> {gen});
+    Substitution witness;
+    e.value().apply([&](auto const& gen) { bindInverse(witness, e.key(), gen); });
+    return generalizeBottomUp(cl, EvaluatePolynom<Generalize> {gen}, &witness);
   }
 
 }

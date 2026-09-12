@@ -62,6 +62,27 @@ struct Generalize
 
 const auto isOne = [](auto x) { return decltype(x)(1) == x; };
 
+/** binds @b var to `(1/k) * var`, the substitution the rule is sound by */
+void bindInverse(Substitution& out, Variable var, IntegerConstantType k)
+{
+  /* the only integer whose reciprocal is an integer, one aside, and one is
+   * not generalized on */
+  ASS_EQ(k, IntegerConstantType(-1))
+  out.bindUnbound(var.id(), IntTraits::minus(TermList::var(var.id())));
+}
+
+void bindInverse(Substitution& out, Variable var, RationalConstantType k)
+{
+  out.bindUnbound(var.id(),
+    RatTraits::mulSimpl(RationalConstantType(1) / k, TermList::var(var.id())));
+}
+
+void bindInverse(Substitution& out, Variable var, RealConstantType k)
+{
+  out.bindUnbound(var.id(),
+    RealTraits::mulSimpl(RealConstantType(1) / k, TermList::var(var.id())));
+}
+
 /** applies the rule */ 
 SimplifyingGeneratingInference1::Result applyRule(Clause* cl, bool doOrderingCheck) 
 {
@@ -117,7 +138,9 @@ SimplifyingGeneratingInference1::Result applyRule(Clause* cl, bool doOrderingChe
     auto& e = selected.unwrap();
     DEBUG("selected generalization: (", e.key(), ", ", e.value(), ")");
     Generalize gen { e.key(), e.value().unwrap(), doOrderingCheck };
-    return generalizeBottomUp(cl, EvaluateMonom<Generalize> {gen});
+    Substitution witness;
+    e.value().unwrap().apply([&](auto k) { bindInverse(witness, e.key(), k); });
+    return generalizeBottomUp(cl, EvaluateMonom<Generalize> {gen}, &witness);
   }
 }
 

@@ -128,6 +128,7 @@ Clause* BinaryResolution::generateClause(Clause* queryCl, Literal* queryLit, Cla
     queryLitAfter = subs->applyToQuery(queryLit);
   }
 
+  ASS(resLits->isEmpty())
   resLits->loadFromIterator(constraints->iterFifo());
   for(unsigned i=0;i<clength;i++) {
     Literal* curr=(*queryCl)[i];
@@ -199,6 +200,8 @@ Clause* BinaryResolution::generateClause(Clause* queryCl, Literal* queryLit, Cla
 
   inf_destroyer.disable(); // ownership passed to the the clause below
   Clause *cl = Clause::fromStack(*resLits, inf);
+  // The constraints went in before anything the inference carried over.
+  InferenceStore::instance()->recordConstraints(cl, 0, nConstraints);
   Literal *qAnsLit, *rAnsLit;
   if ((env.options->questionAnswering() == Options::QuestionAnsweringMode::SYNTHESIS) &&
       (qAnsLit = queryCl->getAnswerLiteral()) && (rAnsLit = resultCl->getAnswerLiteral())) {

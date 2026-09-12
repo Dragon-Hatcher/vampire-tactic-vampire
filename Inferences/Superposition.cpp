@@ -464,7 +464,10 @@ Clause* Superposition<higherOrder>::performSuperposition(
       eqClause, rwClause, rwTerm, rwTermS, tgtTermS, eqLHS, rwLitS, eqLit, comp, eqIsResult, subst.ptr());
   }
 
-  res->loadFromIterator(unifier->computeConstraintLiterals()->iter());
+  auto constraints = unifier->computeConstraintLiterals();
+  unsigned firstConstraint = res->size();
+  unsigned numConstraints = constraints->size();
+  res->loadFromIterator(constraints->iter());
 
   if(hasAgeLimitStrike && passiveClauseContainer->exceedsWeightLimit(weight, numPositiveLiteralsLowerBound, inf)) {
     RSTAT_CTR_INC("superpositions skipped for weight limit after the clause was built");
@@ -474,6 +477,8 @@ Clause* Superposition<higherOrder>::performSuperposition(
 
   inf_destroyer.disable(); // ownership passed to the the clause below
   auto clause = Clause::fromStack(*res, inf);
+  InferenceStore::instance()->recordConstraints(clause, firstConstraint,
+    numConstraints);
   Literal *rwAnsLit, *eqAnsLit;
   if ((env.options->questionAnswering() == Options::QuestionAnsweringMode::SYNTHESIS) &&
       (rwAnsLit = rwClause->getAnswerLiteral()) && (eqAnsLit = eqClause->getAnswerLiteral())) {
