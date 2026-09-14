@@ -21,6 +21,7 @@
 #include "Lib/VirtualIterator.hpp"
 
 #include "Kernel/Clause.hpp"
+#include "Kernel/InferenceStore.hpp"
 #include "Kernel/Inference.hpp"
 #include "Kernel/Signature.hpp"
 #include "Kernel/Term.hpp"
@@ -677,6 +678,11 @@ Clause* instantiate(Clause* original, Substitution& subst, Stack<Literal*> const
     }
   }
   Clause* inst = Clause::fromStack(*instLits, GeneratingInference1(InferenceRule::INSTANTIATION,original));
+  // What the solver chose for each variable, which is the whole of what this
+  // inference did: without it the instance cannot be told from any other, and
+  // a proof that quotes it cannot be followed.
+  InferenceStore::instance()->recordPremiseUse(inst, original, nullptr,
+    TermList::empty(), 0, subst);
   if(splitter){
     splitter->onNewClause(inst);
   }
