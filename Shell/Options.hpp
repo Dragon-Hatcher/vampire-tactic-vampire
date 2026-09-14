@@ -2141,13 +2141,14 @@ public:
   int timeLimitInDeciseconds() const { return _timeLimitInDeciseconds.actualValue; }
   size_t memoryLimit() const { return _memoryLimit.actualValue; }
   void setMemoryLimitOptionValue(size_t newVal) { _memoryLimit.actualValue = newVal; }
-#if VAMPIRE_PERF_EXISTS
+  // Counting instructions needs perf, which is Linux only; the options that
+  // ask for it exist everywhere, because the schedules name them everywhere.
+  // See the comment where they are registered.
   unsigned instructionLimit() const { return _heartbeats.actualValue ? 0 : _instructionLimit.actualValue; }
   void setInstructionLimit(unsigned newVal) { _instructionLimit.actualValue = newVal; }
   unsigned simulatedInstructionLimit() const { return _heartbeats.actualValue ? 0 : _simulatedInstructionLimit.actualValue; }
   unsigned setSimulatedInstructionLimit() const { return _simulatedInstructionLimit.actualValue; }
   bool parsingDoesNotCount() const { return _parsingDoesNotCount.actualValue; }
-#endif
   bool interactive() const { return _interactive.actualValue; }
   void setInteractive(bool v) { _interactive.actualValue = v; }
   int inequalitySplitting() const { return _inequalitySplitting.actualValue; }
@@ -2568,11 +2569,9 @@ private:
   BoolOptionValue _lrsRetroactiveDeletes;
   BoolOptionValue _lrsPreemptiveDeletes;
 
-#if VAMPIRE_PERF_EXISTS
   UnsignedOptionValue _instructionLimit;
   UnsignedOptionValue _simulatedInstructionLimit;
   BoolOptionValue _parsingDoesNotCount;
-#endif
 
   UnsignedOptionValue _memoryLimit; // should be size_t, making an assumption
 

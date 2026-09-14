@@ -95,7 +95,12 @@ void Options::init()
     _memoryLimit.description="Attempt to limit memory use (in MB). Limits less than 20MB are ignored to allow Vampire to start. Known not to work on MacOS for mysterious reasons: https://forums.developer.apple.com/forums/thread/702803";
     _lookup.insert(&_memoryLimit);
 
-#if VAMPIRE_PERF_EXISTS
+  // Registered whatever the platform, though only Linux can enforce them:
+  // every schedule names `i` and most name `sil`, so a build that does not
+  // know the options rejects every strategy it is given and proves nothing.
+  // Where perf does not exist the values are simply never read -- what limits
+  // the search there is `heartbeats`, which counts steps rather than
+  // instructions and is what this fork uses to be deterministic anyway.
   _instructionLimit = UnsignedOptionValue("instruction_limit","i",0);
   _instructionLimit.description="Limit the number (in millions) of executed instructions (excluding the kernel ones).";
   _lookup.insert(&_instructionLimit);
@@ -111,7 +116,6 @@ void Options::init()
   _parsingDoesNotCount.description= "Extend the instruction limit by the amount of instructions it took to parse the input problem.";
   _lookup.insert(&_parsingDoesNotCount);
   _parsingDoesNotCount.tag(OptionTag::DEVELOPMENT);
-#endif
 
     _interactive = BoolOptionValue("interactive","",false);
     _interactive.description = "An experimental interactive mode (commands to use: load <file to parse>, read <line to parse>, pop (to drop the last added set of formulas), run [options to supply], exit).";
@@ -3585,9 +3589,7 @@ std::string Options::generateEncodedOptions() const
     forbidden.insert(&_multicore);
     forbidden.insert(&_statistics);
     forbidden.insert(&_forcedOptions);
-#if VAMPIRE_PERF_EXISTS
     forbidden.insert(&_parsingDoesNotCount);
-#endif
     forbidden.insert(&_ignoreMissing); // or maybe we do!
   }
 
