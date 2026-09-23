@@ -234,7 +234,8 @@ bool PortfolioMode::prepareScheduleAndPerform(const Shell::Property& prop)
   // - champions are selected to cover as much as possible by themselves
   // - at the same time, "quick" is build so that it covers (again) even those problems covered by champions,
   //   but does not go after them as eagerly as those that remained truly uncovered
-  unsigned numChamps = _numWorkers / 2;
+  // (no champions with heartbeats, as the schedule would depend on the number of workers)
+  unsigned numChamps = env.options->heartbeats() ? 0 : _numWorkers / 2;
   while (champions.size() > numChamps) {
     champions.pop();
   }
@@ -414,31 +415,28 @@ static unsigned spentByChild(int channel, unsigned budget) {
   if (got <= 0 || std::sscanf(said, "%llu", &beats) != 1)
     return budget;
   unsigned spent = beats / (100ull * env.options->heartbeats());
-  // Never nothing: starting a slice costs something whatever it then does,
-  // and a schedule of slices that each did nothing would otherwise be walked
-  // for ever.
+  // at least 1, so that the schedule cannot be repeated forever at no cost
   return std::max(1u, std::min(spent, budget));
 }
 
 /**
- * Run a schedule, counting what the slices do rather than how long they take.
+ * Run a schedule under heartbeats, so that the result does not depend on the
+ * speed of the machine or on the number of workers.
  *
- * Every slice is given the budget the schedule states, read as beats; what it
- * does not use is left for the slices after it, so the schedule is walked as
- * far as the problem allows rather than as far as the machine happens to get.
+ * Each slice gets the budget the schedule states, in beats, capped by what the
+ * slices before it left of the overall limit. A slice is only started beside
+ * running ones if its budget fits in what they cannot use; otherwise it waits
+ * for them to report what they spent.
  *
- * The winner is the earliest slice of the schedule that succeeds, not the
- * first one to finish. With a single worker those are the same thing; with
- * more, a success means killing the slices after it and waiting for those
- * before it, either of which may yet succeed and be preferred.
+ * The winner is the earliest successful slice in the schedule, not the first
+ * to finish: on success, later slices are killed and earlier ones awaited.
  */
 std::optional<fs::path> PortfolioMode::runScheduleByBeats(Schedule schedule) {
   TIME_TRACE("run schedule");
 
   pid_t me = getpid();
   Schedule::BottomFirstIterator it(schedule);
-  // pid |-> where the slice stands in the schedule, what it was given, and
-  // what it will say it spent
+  // pid |-> position in the schedule, budget, and the pipe it reports on
   struct Slice { unsigned index; unsigned budget; int channel; };
   std::map<pid_t, Slice> running;
   unsigned launched = 0;
@@ -447,28 +445,43 @@ std::optional<fs::path> PortfolioMode::runScheduleByBeats(Schedule schedule) {
   long remaining = env.options->timeLimitInDeciseconds();
   bool unlimited = (remaining == 0);
   bool scheduleRepeat = false;
+  // the next slice, taken from the schedule but not yet started
+  std::optional<std::string> pending;
 
   while (running.size() || unlimited || remaining > 0) {
-    // running under capacity, and nothing better than what is running left to
-    // hope for: wake up more slices
+    // under capacity and no winner yet: start more slices
     while (running.size() < _numWorkers
         && winningSlice == std::numeric_limits<unsigned>::max()
         && (unlimited || remaining > 0)) {
-      // after exhaustion we replace the schedule
-      // by copies with x2 limits and do this forever
-      if(!it.hasNext()) {
-        Schedule next;
-        rescaleScheduleLimits(schedule, next, 2.0);
-        scheduleRepeat = true;
-        schedule = std::move(next);
-        it = Schedule::BottomFirstIterator(schedule);
+      if (!pending) {
+        // after exhaustion we replace the schedule
+        // by copies with x2 limits and do this forever
+        if(!it.hasNext()) {
+          Schedule next;
+          rescaleScheduleLimits(schedule, next, 2.0);
+          scheduleRepeat = true;
+          schedule = std::move(next);
+          it = Schedule::BottomFirstIterator(schedule);
+        }
+        ALWAYS(it.hasNext());
+        pending = it.next();
       }
-      ALWAYS(it.hasNext());
 
-      std::string code = it.next();
-      unsigned budget = getSliceTime(code);
-      if (!unlimited && (!budget || budget > (unsigned)remaining))
-        budget = remaining;
+      unsigned budget = getSliceTime(*pending);
+      if (!unlimited) {
+        long given = 0;
+        for (auto& [pid, other] : running)
+          given += other.budget;
+        if (running.empty()) {
+          if (!budget || budget > (unsigned)remaining)
+            budget = remaining;
+        } else if (!budget || (long)budget > remaining - given) {
+          // the slices still running might leave less than its budget
+          break;
+        }
+      }
+      std::string code = std::move(*pending);
+      pending.reset();
       int channel[2];
       if (pipe(channel) != 0)
         USER_ERROR("could not open a pipe to a slice");
