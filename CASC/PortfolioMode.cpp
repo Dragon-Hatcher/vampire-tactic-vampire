@@ -78,6 +78,8 @@ PortfolioMode::PortfolioMode(Problem* problem) : _prb(problem), _slowness(env.op
  * The function that does all the job: reads the input files and runs
  * Vampires to solve problems.
  */
+pid_t PortfolioMode::winner = 0;
+
 bool PortfolioMode::perform(Problem* problem)
 {
   PortfolioMode pm(problem);
@@ -236,7 +238,9 @@ bool PortfolioMode::prepareScheduleAndPerform(const Shell::Property& prop)
   // - champions are selected to cover as much as possible by themselves
   // - at the same time, "quick" is build so that it covers (again) even those problems covered by champions,
   //   but does not go after them as eagerly as those that remained truly uncovered
-  unsigned numChamps = _numWorkers / 2;
+  // Not when counting beats: which slices go first would depend on how many
+  // workers there are, and so would which one wins.
+  unsigned numChamps = env.options->heartbeats() ? 0 : _numWorkers / 2;
   while (champions.size() > numChamps) {
     champions.pop();
   }
@@ -439,6 +443,13 @@ static unsigned spentByChild(int channel, unsigned budget) {
  * first one to finish. With a single worker those are the same thing; with
  * more, a success means killing the slices after it and waiting for those
  * before it, either of which may yet succeed and be preferred.
+ *
+ * And each slice is given what it would have been given by a single worker,
+ * so that how many there are changes when the answer comes and never what it
+ * is. Alone, a slice gets what the schedule states or, if less, what the ones
+ * before it left. Those still running will leave at least what they were not
+ * given, so a slice whose budget fits in that is started beside them; one that
+ * does not waits for them to say what they spent.
  */
 std::optional<fs::path> PortfolioMode::runScheduleByBeats(Schedule schedule) {
   TIME_TRACE("run schedule");
@@ -455,6 +466,8 @@ std::optional<fs::path> PortfolioMode::runScheduleByBeats(Schedule schedule) {
   long remaining = env.options->timeLimitInDeciseconds();
   bool unlimited = (remaining == 0);
   bool scheduleRepeat = false;
+  // the next slice, taken from the schedule but waiting to be started
+  std::optional<std::string> pending;
 
   while (running.size() || unlimited || remaining > 0) {
     // running under capacity, and nothing better than what is running left to
@@ -462,21 +475,35 @@ std::optional<fs::path> PortfolioMode::runScheduleByBeats(Schedule schedule) {
     while (running.size() < _numWorkers
         && winningSlice == std::numeric_limits<unsigned>::max()
         && (unlimited || remaining > 0)) {
-      // after exhaustion we replace the schedule
-      // by copies with x2 limits and do this forever
-      if(!it.hasNext()) {
-        Schedule next;
-        rescaleScheduleLimits(schedule, next, 2.0);
-        scheduleRepeat = true;
-        schedule = std::move(next);
-        it = Schedule::BottomFirstIterator(schedule);
+      if (!pending) {
+        // after exhaustion we replace the schedule
+        // by copies with x2 limits and do this forever
+        if(!it.hasNext()) {
+          Schedule next;
+          rescaleScheduleLimits(schedule, next, 2.0);
+          scheduleRepeat = true;
+          schedule = std::move(next);
+          it = Schedule::BottomFirstIterator(schedule);
+        }
+        ALWAYS(it.hasNext());
+        pending = it.next();
       }
-      ALWAYS(it.hasNext());
 
-      std::string code = it.next();
-      unsigned budget = getSliceTime(code);
-      if (!unlimited && (!budget || budget > (unsigned)remaining))
-        budget = remaining;
+      unsigned budget = getSliceTime(*pending);
+      if (!unlimited) {
+        long given = 0;
+        for (auto& [pid, other] : running)
+          given += other.budget;
+        if (running.empty()) {
+          if (!budget || budget > (unsigned)remaining)
+            budget = remaining;
+        } else if (!budget || (long)budget > remaining - given) {
+          // what the slices before it leave might cut it short
+          break;
+        }
+      }
+      std::string code = std::move(*pending);
+      pending.reset();
       int channel[2];
       if (pipe(channel) != 0)
         USER_ERROR("could not open a pipe to a slice");
@@ -547,6 +574,7 @@ std::optional<fs::path> PortfolioMode::runScheduleByBeats(Schedule schedule) {
   if(!winner)
     return {};
 
+  PortfolioMode::winner = winner;
   return proofPath(me, winner);
 }
 
@@ -631,6 +659,7 @@ std::optional<fs::path> PortfolioMode::runSchedule(Schedule schedule) {
   if(!successful)
     return {};
 
+  PortfolioMode::winner = successful;
   return proofPath(me, successful);
 }
 

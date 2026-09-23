@@ -22,6 +22,8 @@
 
 #include "Lib/ScopedPtr.hpp"
 
+#include <sys/types.h>
+
 #include "Kernel/Problem.hpp"
 
 #include "Shell/Property.hpp"
@@ -37,6 +39,13 @@ class PortfolioMode {
   PortfolioMode(Kernel::Problem* problem);
 public:
   static bool perform(Kernel::Problem* problem);
+
+  /**
+   * The slice whose proof `perform` settled on, or 0 if none: with several
+   * running at once, more than one may succeed, and whatever a slice leaves
+   * behind for itself is only of use from this one.
+   */
+  static pid_t winner;
 
   static void rescaleScheduleLimits(const Schedule& sOld, Schedule& sNew, float limit_multiplier);
   static void addScheduleExtra(const Schedule& sOld, Schedule& sNew, std::string extra);
