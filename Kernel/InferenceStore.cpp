@@ -79,6 +79,12 @@ void InferenceStore::recordSplittingNameLiteral(Unit* us, Literal* lit)
   ALWAYS(_splittingNameLiterals.insert(us->number(), lit));
 }
 
+Literal* InferenceStore::splittingNameLiteral(Unit* us) const
+{
+  Literal* lit = nullptr;
+  return _splittingNameLiterals.find(us->number(), lit) ? lit : nullptr;
+}
+
 
 /**
  * Record the introduction of a new symbol

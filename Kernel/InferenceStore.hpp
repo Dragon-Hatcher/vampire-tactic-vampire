@@ -81,6 +81,11 @@ public:
   unsigned polarityFlipBoundary() const { return _polarityFlipBoundary; }
 
   void recordSplittingNameLiteral(Unit* us, Literal* lit);
+  /**
+   * The literal a general splitting component names its split by, as
+   * `recordSplittingNameLiteral` recorded it, or nullptr for any other unit.
+   */
+  Literal* splittingNameLiteral(Unit* us) const;
   void recordIntroducedSymbol(Unit* u, Signature::Symbol* sym);
   void recordIntroducedSkolemSymbol(Unit* u, Signature::Symbol* sym, unsigned replacedVar, Term* symTerm);
   void recordIntroducedSplitName(Unit* u, std::string name);
