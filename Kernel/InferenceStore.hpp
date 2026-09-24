@@ -17,6 +17,8 @@
 #define __InferenceStore__
 
 #include <ostream>
+#include <string>
+#include <unordered_map>
 
 #include "Forwards.hpp"
 
@@ -90,6 +92,16 @@ public:
   void recordIntroducedSymbol(Unit* u, Signature::Symbol* sym);
   void recordIntroducedSkolemSymbol(Unit* u, Signature::Symbol* sym, unsigned replacedVar, Term* symTerm);
   void recordIntroducedSplitName(Unit* u, std::string name);
+
+  /**
+   * The definition that introduced the split name @b name, null if none did.
+   *
+   * A clause the solver is handed can name a component no inference of the
+   * proof splits off -- a theory conflict's ground literals are named as they
+   * are converted -- so nothing in the proof leads to that name's definition,
+   * and it is found by the name.
+   */
+  Unit* splitDefinition(const std::string& name) const;
 
   /**
    * How a generated clause used one of its premises: which of the premise's
@@ -366,6 +378,8 @@ private:
   DHMap<Signature::Symbol*, Term*, FnvHash, PtrIdentityHash> _introducedSkolemSymTerms;
 
   DHMap<unsigned,std::string, FnvHash, IdentityHash> _introducedSplitNames;
+  // split name -> the definition that introduced it
+  std::unordered_map<std::string, Unit*> _splitDefinitions;
 
   // generated unit id -> how it used each premise
   DHMap<unsigned,Stack<PremiseUse>, FnvHash, IdentityHash> _premiseUses;

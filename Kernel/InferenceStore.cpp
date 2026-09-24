@@ -307,6 +307,13 @@ void InferenceStore::introducedSkolems(Unit* u,
 void InferenceStore::recordIntroducedSplitName(Unit* u, std::string name)
 {
   ALWAYS(_introducedSplitNames.insert(u->number(),name));
+  _splitDefinitions[name] = u;
+}
+
+Unit* InferenceStore::splitDefinition(const std::string& name) const
+{
+  auto found = _splitDefinitions.find(name);
+  return found == _splitDefinitions.end() ? nullptr : found->second;
 }
 
 /**
