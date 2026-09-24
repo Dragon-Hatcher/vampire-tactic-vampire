@@ -13,6 +13,7 @@
  */
 
 
+#include "Kernel/InferenceStore.hpp"
 #include "Kernel/NumTraits.hpp"
 
 #include "Kernel/Clause.hpp"
@@ -62,8 +63,10 @@ Clause* Normalization::simplify(Clause* cl)
   TIME_TRACE("perform alasca normalization")
   bool altered = false; 
   Recycled<Stack<Literal*>> out;
+  // What each literal became, and by what factor, for replaying the step.
+  Stack<InferenceStore::LiteralImage> images;
   for (unsigned i = 0; i < cl->size(); i++) {
-    auto lit = _norm.normalizedLiteral((*cl)[i]);
+    auto [lit, factor] = _norm.normalizedLiteralWithFactor((*cl)[i]);
     altered |= lit != (*cl)[i];
     auto triv = trivial(lit);
     if (triv.isSome()) {
@@ -73,14 +76,18 @@ Clause* Normalization::simplify(Clause* cl)
       } else {
         /* trivialy false literals don't have to be added to the output */
         altered = true;
+        images.push({(*cl)[i], nullptr, factor});
       }
     } else {
+      images.push({(*cl)[i], lit, factor});
       out->push(lit);
     }
   }
   if (altered) {
     Inference inf(SimplifyingInference1(Kernel::InferenceRule::ALASCA_NORMALIZATION, cl));
     auto outCl = Clause::fromStack(*out, inf);
+    InferenceStore::instance()->recordLiteralImages(outCl,
+        InferenceStore::LiteralProcedure::ALASCA_NORMALIZATION, std::move(images));
     DEBUG_NORMALIZE(0, *cl, " ==> ", *outCl)
     return outCl;
   } else {

@@ -12,6 +12,7 @@
  * Implements class InterpretedEvaluation.
  */
 
+#include "Kernel/InferenceStore.hpp"
 #include "Lib/Stack.hpp"
 #include "Debug/TimeProfiling.hpp"
 #include "Kernel/Clause.hpp"
@@ -30,7 +31,7 @@ using namespace Kernel;
 
 
 InterpretedEvaluation::InterpretedEvaluation(bool doNormalize) :
-  _simpl(new InterpretedLiteralEvaluator(doNormalize))
+  _simpl(new InterpretedLiteralEvaluator(doNormalize)), _doNormalize(doNormalize)
 {
 }
 
@@ -66,6 +67,8 @@ Clause* InterpretedEvaluation::simplify(Clause* cl)
 
 
     RStack<Literal*> resLits;
+    // What each literal became, for replaying the step.
+    Stack<InferenceStore::LiteralImage> images;
     unsigned clen=cl->length();
     bool modified=false;
     for(unsigned li=0;li<clen; li++) {
@@ -74,6 +77,7 @@ Clause* InterpretedEvaluation::simplify(Clause* cl)
       bool constant, constTrue;
       bool litMod=simplifyLiteral(lit, constant, res, constTrue);
       if(!litMod) {
+        images.push({lit, lit, RationalConstantType(1)});
         resLits->push(lit);
         continue;
       }
@@ -83,17 +87,24 @@ Clause* InterpretedEvaluation::simplify(Clause* cl)
           //cout << "evaluate " << cl->toString() << " to true" << endl;
           return 0;
         } else {
+          images.push({lit, nullptr, RationalConstantType(1)});
           continue;
         }
       }
-      
+
+      images.push({lit, res, RationalConstantType(1)});
       resLits->push(res);
     }
     if(!modified) {
       return cl;
     }
 
-    return Clause::fromStack(*resLits,SimplifyingInference1(InferenceRule::EVALUATION, cl));
+    Clause* result = Clause::fromStack(*resLits,SimplifyingInference1(InferenceRule::EVALUATION, cl));
+    InferenceStore::instance()->recordLiteralImages(result,
+      _doNormalize ? InferenceStore::LiteralProcedure::INTERPRETED_EVALUATION_NORMALIZING
+                       : InferenceStore::LiteralProcedure::INTERPRETED_EVALUATION,
+      std::move(images));
+    return result;
 }
 
 }

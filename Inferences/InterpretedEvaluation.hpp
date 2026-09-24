@@ -36,6 +36,8 @@ private:
   bool simplifyLiteral(Literal* lit, bool& constant, Literal*& res, bool& constantTrue);
 
   InterpretedLiteralEvaluator* _simpl;
+  /** Whether `_simpl` normalizes inequalities, which replaying a step needs told. */
+  bool _doNormalize;
 };
 
 };

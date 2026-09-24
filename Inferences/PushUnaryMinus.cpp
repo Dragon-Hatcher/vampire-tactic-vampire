@@ -8,6 +8,7 @@
  * and in the source directory
  */
 
+#include "Kernel/InferenceStore.hpp"
 #include "Inferences/PushUnaryMinus.hpp"
 #include "Kernel/Clause.hpp"
 #include "Kernel/TermIterators.hpp"
@@ -129,6 +130,12 @@ Clause* PushUnaryMinus::simplify(Clause* cl_)
     return cl_;
   } else {
     auto result = Clause::fromStack(out, SimplifyingInference1(InferenceRule::EVALUATION, cl_));
+    // Each literal is rewritten where it stands.
+    Stack<InferenceStore::LiteralImage> images(cl.size());
+    for (unsigned i = 0; i < cl.size(); i++)
+      images.push({cl[i], out[i], RationalConstantType(1)});
+    InferenceStore::instance()->recordLiteralImages(result,
+      InferenceStore::LiteralProcedure::PUSH_UNARY_MINUS, std::move(images));
     DEBUG("out: ", *result)
     return result;
   }

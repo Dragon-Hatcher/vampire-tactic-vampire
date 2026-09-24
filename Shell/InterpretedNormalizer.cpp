@@ -12,6 +12,7 @@
  * Implements class InterpretedNormalizer.
  */
 
+#include "Kernel/InferenceStore.hpp"
 #include "Lib/Environment.hpp"
 #include "Lib/ScopedPtr.hpp"
 
@@ -462,6 +463,8 @@ Clause* InterpretedNormalizer::apply(Clause* cl)
 {
   static LiteralStack lits;
   lits.reset();
+  // What each literal became, for replaying the step.
+  Stack<InferenceStore::LiteralImage> images;
   unsigned clen = cl->length();
   bool modified = false;
 
@@ -478,11 +481,13 @@ Clause* InterpretedNormalizer::apply(Clause* cl)
       if(newConst) {
 	return 0;
       }
+      images.push({orig, nullptr, RationalConstantType(1)});
       continue;
     }
     if(newLit != orig) {
       modified = true;
     }
+    images.push({orig, newLit, RationalConstantType(1)});
     lits.push(newLit);
   }
   if(!modified) {
@@ -491,6 +496,8 @@ Clause* InterpretedNormalizer::apply(Clause* cl)
 
   Clause* res = Clause::fromStack(lits,
       FormulaClauseTransformation(InferenceRule::THEORY_NORMALIZATION, cl));
+  InferenceStore::instance()->recordLiteralImages(res,
+      InferenceStore::LiteralProcedure::THEORY_NORMALIZATION, std::move(images));
   // DBG(*cl, " ==> ", *res)
   return res;
 }

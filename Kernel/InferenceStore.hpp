@@ -28,6 +28,7 @@
 
 #include "Kernel/Inference.hpp"
 #include "Kernel/Signature.hpp"
+#include "Kernel/Theory.hpp"
 
 namespace Kernel {
 
@@ -170,6 +171,60 @@ public:
 
   /** `{first, count}` of @b u's constraint literals, `{0, 0}` if none. */
   std::pair<unsigned, unsigned> constraints(Unit* u) const;
+
+  /**
+   * What one literal of a literal-wise simplification's premise became.
+   *
+   * Evaluation, theory normalization, ALASCA normalization and cancellation
+   * rewrite a clause a literal at a time: each literal becomes one literal of
+   * the conclusion, or is found false and dropped. Which it became is known
+   * where the rule builds the conclusion and lost once it has.
+   */
+  struct LiteralImage {
+    /** The premise's literal. */
+    Literal* from;
+    /**
+     * The conclusion literal it became, null if it was dropped. Literals, not
+     * their positions: literal selection reorders a clause's literals after
+     * it is made, and vampire shares literals, so this is what still says
+     * which is which when the proof is written out.
+     */
+    Literal* to;
+    /**
+     * For a literal ALASCA normalized, the number the difference of its sides
+     * is the normal form's term times; see
+     * `InequalityNormalizer::tryNormalizeInterpreted`. One otherwise.
+     */
+    RationalConstantType factor;
+  };
+
+  /**
+   * Which procedure rewrote a clause a literal at a time. The inference rule
+   * does not say: evaluation is whichever of three evaluators the options
+   * chose, and they rewrite a literal differently.
+   */
+  enum class LiteralProcedure : unsigned {
+    THEORY_NORMALIZATION = 0,
+    INTERPRETED_EVALUATION = 1,
+    /** `InterpretedEvaluation` with inequality normalization on. */
+    INTERPRETED_EVALUATION_NORMALIZING = 2,
+    POLYNOMIAL_EVALUATION = 3,
+    PUSH_UNARY_MINUS = 4,
+    ALASCA_NORMALIZATION = 5,
+    CANCELLATION = 6,
+  };
+
+  /** How a literal-wise simplification rewrote its premise. */
+  struct LiteralRewriting {
+    LiteralProcedure procedure;
+    Stack<LiteralImage> images;
+  };
+
+  void recordLiteralImages(Unit* generated, LiteralProcedure procedure,
+                           Stack<LiteralImage> images);
+
+  /** How @b u's premise was rewritten, null when not recorded. */
+  const LiteralRewriting* literalImages(Unit* u) const;
 
   /**
    * Works out how a subsumption resolution step used its premises, and records
@@ -315,6 +370,7 @@ private:
   // generated unit id -> how it used each premise
   DHMap<unsigned,Stack<PremiseUse>, FnvHash, IdentityHash> _premiseUses;
   DHMap<unsigned,std::pair<unsigned,unsigned>, FnvHash, IdentityHash> _constraints;
+  DHMap<unsigned, LiteralRewriting, FnvHash, IdentityHash> _literalImages;
 };
 
 };

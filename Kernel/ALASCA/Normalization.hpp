@@ -198,6 +198,16 @@ namespace Kernel {
     template<class NumTraits>
     static auto normalizeFactors(Perfect<Polynom<NumTraits>> in) -> Perfect<Polynom<NumTraits>>
     {
+      typename NumTraits::ConstantType divisor(1);
+      return normalizeFactors(in, divisor);
+    }
+
+    /** `normalizeFactors`, saying what the polynomial was divided by. */
+    template<class NumTraits>
+    static auto normalizeFactors(Perfect<Polynom<NumTraits>> in,
+        typename NumTraits::ConstantType& divisor) -> Perfect<Polynom<NumTraits>>
+    {
+      divisor = typename NumTraits::ConstantType(1);
       if (in->nSummands() == 0) {
         return in;
       }
@@ -209,6 +219,7 @@ namespace Kernel {
       if (gcd == 1 || gcd == 0) {
         return in;
       } else {
+        divisor = gcd;
         auto  out = perfect(Polynom<NumTraits>(in->iterSummands()
               .map([=](auto s) { return Monom<NumTraits>(intDivide(gcd, s.numeral), s.factors); })
               .template collect<Stack>()));
@@ -221,6 +232,23 @@ namespace Kernel {
     template<class NumTraits>
     Option<AlascaLiteral<NumTraits>> tryNormalizeInterpreted(Literal* lit) const
     {
+      typename NumTraits::ConstantType factor(1);
+      return tryNormalizeInterpreted<NumTraits>(lit, factor);
+    }
+
+    /**
+     * `tryNormalizeInterpreted`, saying by what the normal form's term was
+     * scaled: `factor` is the number the difference of the literal's sides
+     * (once put the way the normal form reads, and over the integers with the
+     * one a non-strict inequality is turned strict by) is the normal form's
+     * term times. It is the gcd the term was divided by, negated where an
+     * equation's sides were turned round.
+     */
+    template<class NumTraits>
+    Option<AlascaLiteral<NumTraits>> tryNormalizeInterpreted(Literal* lit,
+        typename NumTraits::ConstantType& factor) const
+    {
+      factor = typename NumTraits::ConstantType(1);
       DEBUG_NORM(0, "in: ", *lit, " (", NumTraits::name(), ")")
       using ASig = AlascaSignature<NumTraits>;
 
@@ -298,7 +326,7 @@ namespace Kernel {
 
         ASS(!isInt || pred != AlascaPredicate::GREATER_EQ)
 
-        auto factorsNormalized = normalizeFactors(normalize(TypedTermList(t, ASig::sort())).wrapPoly<NumTraits>());
+        auto factorsNormalized = normalizeFactors(normalize(TypedTermList(t, ASig::sort())).wrapPoly<NumTraits>(), factor);
         switch(pred) {
           case AlascaPredicate::EQ:
           case AlascaPredicate::NEQ:
@@ -307,6 +335,7 @@ namespace Kernel {
               // TODO choose the numeral as the pivot if there is one
               if (factorsNormalized->summandAt(0).numeral < 0) {
                 factorsNormalized = perfect(-*factorsNormalized);
+                factor = -factor;
               }
             }
           case AlascaPredicate::GREATER:
@@ -334,6 +363,25 @@ namespace Kernel {
         || [&](){ return wrapCoproduct(tryNormalizeInterpreted< RatTraits>(lit)); }
         || [&](){ return wrapCoproduct(tryNormalizeInterpreted<RealTraits>(lit)); }
         || Option<Out>();
+    }
+
+    /**
+     * `normalizedLiteral`, with the factor `tryNormalizeInterpreted` gives, as
+     * a rational: one for a literal that is not a comparison of numbers.
+     */
+    std::pair<Literal*, RationalConstantType> normalizedLiteralWithFactor(Literal* lit) const
+    {
+      Option<std::pair<Literal*, RationalConstantType>> interpreted;
+      tryNumTraits([&](auto numTraits) {
+        using NT = decltype(numTraits);
+        typename NT::ConstantType factor(1);
+        auto norm = tryNormalizeInterpreted<NT>(lit, factor);
+        if (norm.isSome())
+          interpreted = some(std::make_pair(norm->denormalize(), RationalConstantType(factor)));
+        return norm.isSome() ? some(0) : Option<int>();
+      });
+      if (interpreted.isSome()) return *interpreted;
+      return { normalizeUninterpreted(lit), RationalConstantType(1) };
     }
 
     Literal* normalizedLiteral(Literal* lit) const

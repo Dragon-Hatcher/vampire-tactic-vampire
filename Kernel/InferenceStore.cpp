@@ -207,6 +207,17 @@ void InferenceStore::recordConstraints(Unit* generated, unsigned first,
     _constraints.set(generated->number(), {first, count});
 }
 
+void InferenceStore::recordLiteralImages(Unit* generated,
+  LiteralProcedure procedure, Stack<LiteralImage> images)
+{
+  _literalImages.set(generated->number(), {procedure, std::move(images)});
+}
+
+const InferenceStore::LiteralRewriting* InferenceStore::literalImages(Unit* u) const
+{
+  return _literalImages.findPtr(u->number());
+}
+
 std::pair<unsigned, unsigned> InferenceStore::constraints(Unit* u) const
 {
   std::pair<unsigned, unsigned> found;
