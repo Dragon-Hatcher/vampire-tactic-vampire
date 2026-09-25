@@ -229,6 +229,12 @@ public:
      * the recorded witness, up to the identities of a ring.
      */
     GENERALIZATION = 7,
+    /**
+     * ALASCA's VIRAS quantifier elimination: the literals eliminated from,
+     * each substituted a virtual term for the eliminated variable, which is
+     * recorded as the term the step acted on; the others as they are.
+     */
+    VIRAS = 8,
   };
 
   /** How a literal-wise simplification rewrote its premise. */
