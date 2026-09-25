@@ -17,6 +17,7 @@
 #include "Kernel/EqHelper.hpp"
 #include "Kernel/Clause.hpp"
 #include "Lib/Environment.hpp"
+#include "Kernel/InferenceStore.hpp"
 #include "Shell/Statistics.hpp"
 #include "Saturation/SaturationAlgorithm.hpp"
 
@@ -66,7 +67,11 @@ Clause* InnerRewriting::simplify(Clause* cl)
               }
             }
 
-            return Clause::fromStack(*resLits,SimplifyingInference1(InferenceRule::INNER_REWRITING, cl));
+            Clause* res = Clause::fromStack(*resLits,SimplifyingInference1(InferenceRule::INNER_REWRITING, cl));
+            // The disequality rewritten with, and the side rewritten away.
+            InferenceStore::instance()->recordPremiseUse(res, cl, rwLit, lhs, 0,
+              Stack<std::pair<unsigned, TermList>>());
+            return res;
           }
         }
       }

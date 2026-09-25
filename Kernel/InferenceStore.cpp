@@ -52,7 +52,6 @@
 #include <set>
 #include<string>
 #include<vector>
-//TODO: when we delete clause, we should also delete all its records from the inference store
 
 namespace Kernel
 {
@@ -200,6 +199,10 @@ void InferenceStore::forget(Unit* u)
   _premiseUses.remove(u->number());
   _constraints.remove(u->number());
   _literalImages.remove(u->number());
+  _splittingNameLiterals.remove(u->number());
+  _genClauseOfClause.remove(u->number());
+  _conjunctChoices.remove(u->number());
+  _namings.remove(u->number());
 }
 
 void InferenceStore::recordConstraints(Clause* generated, unsigned first,
