@@ -10,6 +10,7 @@
 
 #include "Demodulation.hpp"
 #include "Kernel/EqHelper.hpp"
+#include "Kernel/InferenceStore.hpp"
 #include "Lib/StringUtils.hpp"
 
 namespace Inferences {
@@ -73,17 +74,55 @@ Option<Clause*> Demodulation::apply(
   auto replacement = sigmaL(lhs.smallerSide());
 
   auto altered = false;
+  // The premise's literals the rewrite changed, and what each became.
+  Stack<std::pair<Literal*, Literal*>> rewritten;
   auto lits = iterTraits(rhs.clause->iterLits())
     .map([&](auto lit) {
         auto repl = EqHelper::replace(sigmaR(lit), sigmaR(rhs.term), replacement);
         altered |= repl != lit;
+        if (repl != sigmaR(lit)) {
+          rewritten.push({lit, repl});
+        }
         return repl;
     })
     .template collect<Stack>();
   ASS_REP(altered, outputToString("\n", lhs, "\n", rhs))
 
   Inference inf(SimplifyingInference2(Kernel::InferenceRule::ALASCA_FWD_DEMODULATION, lhs.clause(), rhs.clause));
-  return Option<Clause*>(Clause::fromStack(lits, inf));
+  auto out = Clause::fromStack(lits, inf);
+  // What the inference did to each premise, as superposition records it: the
+  // equation and which side of it, the term it rewrote throughout the other
+  // premise, and the match -- and the renaming of the other premise's
+  // variables, which is all its bank is put through.
+  {
+    auto record = [&](Clause* premise, unsigned bank, Literal* on, TermList term,
+                      unsigned flags) {
+      Substitution s;
+      DHSet<unsigned, FnvHash, IdentityHash> vars;
+      premise->collectVars(vars);
+      for (unsigned v : iterTraits(vars.iterator()))
+        s.bindUnbound(v, subs.apply(TermList(v, false), bank));
+      InferenceStore::instance()->recordPremiseUse(out, premise, on, term, flags, s);
+    };
+    record(lhs.clause(), lBank, lhs.literal(), lhs.biggerSide(), 0);
+    auto eq = lhs.literal();
+    auto t = lhs.smallerSide();
+    if (!(*eq->nthArgument(0) == t || *eq->nthArgument(1) == t)) {
+      InferenceStore::instance()->recordOther(out, lhs.clause(), t);
+    }
+    // The rewrite is of the whole premise; the literal recorded is one it
+    // rewrote in.
+    ASS(rewritten.isNonEmpty())
+    record(rhs.clause, rBank, rewritten[0].first, rhs.term,
+      InferenceStore::rewritesWholePremise);
+    for (auto [from, to] : iterTraits(rewritten.iter())) {
+      TermList lhsArg = from->isEquality()
+        ? EqHelper::replace(sigmaR(from->termArg(0)), sigmaR(rhs.term), replacement)
+        : TermList::empty();
+      InferenceStore::instance()->recordRewritten(out, rhs.clause, from, to, lhsArg);
+    }
+  }
+  return Option<Clause*>(out);
 }
 
 

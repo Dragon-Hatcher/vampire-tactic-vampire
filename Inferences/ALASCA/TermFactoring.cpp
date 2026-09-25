@@ -20,6 +20,7 @@
 #include "Kernel/Clause.hpp"
 #include "Kernel/Inference.hpp"
 #include "Debug/TimeProfiling.hpp"
+#include "Kernel/InferenceStore.hpp"
 
 #include "TermFactoring.hpp"
 #include "Kernel/RobSubstitution.hpp"
@@ -157,10 +158,25 @@ Option<Clause*> TermFactoring::applyRule(
   conclusion.push(resLit);
 
   // adding `Cnst`
+  unsigned firstConstraint = conclusion.size();
   conclusion.loadFromIterator(cnst->iterFifo());
 
   Inference inf(GeneratingInference1(Kernel::InferenceRule::ALASCA_TERM_FACTORING, sel1.clause()));
   auto clause = Clause::fromStack(conclusion, inf);
+  // What the inference did to its premise: the literal, the two atoms it
+  // unified -- up to arithmetic, so equal as numbers rather than one term --
+  // and the unifier, which is discarded with the clause built; and the pairs
+  // it could not unify, which are literals of the conclusion.
+  {
+    Substitution s;
+    DHSet<unsigned, FnvHash, IdentityHash> vars;
+    sel1.clause()->collectVars(vars);
+    for (unsigned v : iterTraits(vars.iterator()))
+      s.bindUnbound(v, uwa->subs().apply(TermList(v, false), 0));
+    InferenceStore::instance()->recordPremiseUse(clause, sel1.clause(), sel1.literal(), s1, 0, s);
+    InferenceStore::instance()->recordOther(clause, sel1.clause(), s2);
+    InferenceStore::instance()->recordConstraints(clause, firstConstraint, cnst->size());
+  }
   DEBUG("result: ", *clause);
   return Option<Clause*>(clause);
 }

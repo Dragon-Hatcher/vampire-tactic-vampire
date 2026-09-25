@@ -153,12 +153,12 @@ public:
     unsigned flags;
     Stack<std::pair<unsigned, TermList>> bindings;
     /**
-     * What the equation this use acted on rewrote its side, `term`, to, empty
-     * when that is the equation's other side. An arithmetic equation
-     * `k s + t = 0` is used as `s = -t/k`, whose right-hand side the literal
-     * does not have: `recordRewritesTo`.
+     * A second term of the premise the inference acted on, empty if it acted
+     * on one: what an arithmetic equation `k s + t = 0` rewrote `s` to,
+     * `-t/k`, which is no side of it; or the atom a factoring unified `term`
+     * with. `recordOther`.
      */
-    TermList to = TermList::empty();
+    TermList other = TermList::empty();
     /** The premise's literals the inference rewrote, `recordRewritten`. */
     Stack<RewrittenLiteral> rewritten = Stack<RewrittenLiteral>();
   };
@@ -210,11 +210,11 @@ public:
     TermList rewrittenLhs);
 
   /**
-   * That the equation the last use of @b premise recorded for @b generated
-   * acted on rewrote the side recorded against it to @b to, a term of the
-   * premise's own variables, which the use's bindings instantiate.
+   * The second term, @b other, the last use of @b premise recorded for
+   * @b generated acted on: a term of the premise's own variables, which the
+   * use's bindings instantiate.
    */
-  void recordRewritesTo(Unit* generated, Unit* premise, TermList to);
+  void recordOther(Unit* generated, Unit* premise, TermList other);
 
   /** How @b u used each of its premises, empty when nothing was recorded. */
   const Stack<PremiseUse>* premiseUses(Unit* u) const;

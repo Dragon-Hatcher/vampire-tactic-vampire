@@ -177,7 +177,7 @@ Option<Clause*> SuperpositionConf::applyRule_(
     auto eq = lhs.literal();
     auto t = lhs.smallerSide();
     if (!(eq->isEquality() && (*eq->nthArgument(0) == t || *eq->nthArgument(1) == t))) {
-      InferenceStore::instance()->recordRewritesTo(out, lhs.clause(), t);
+      InferenceStore::instance()->recordOther(out, lhs.clause(), t);
     }
     record(rhs.clause(), rhsVarBank, rhs.literal(), s2,
       _simultaneousSuperposition ? InferenceStore::rewritesWholePremise : 0);

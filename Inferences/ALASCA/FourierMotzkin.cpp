@@ -174,17 +174,18 @@ Option<Clause*> FourierMotzkinConf::applyRule_(
     // which of a premise is the unifier's to say and nothing else's; and the
     // pairs it could not unify are the literals at the end.
     {
-      auto record = [&](Clause* premise, unsigned bank, Literal* on) {
+      // The atom of each premise it unified, too: its unifier works up to
+      // arithmetic, so the two can be equal as numbers rather than one term.
+      auto record = [&](Clause* premise, unsigned bank, Literal* on, TermList atom) {
         Substitution s;
         DHSet<unsigned, FnvHash, IdentityHash> vars;
         premise->collectVars(vars);
         for (unsigned v : iterTraits(vars.iterator()))
           s.bindUnbound(v, uwa.subs().apply(TermList(v, false), bank));
-        InferenceStore::instance()->recordPremiseUse(cl, premise, on,
-          TermList::empty(), 0, s);
+        InferenceStore::instance()->recordPremiseUse(cl, premise, on, atom, 0, s);
       };
-      record(lhs.clause(), lhsVarBank, lhs.literal());
-      record(rhs.clause(), rhsVarBank, rhs.literal());
+      record(lhs.clause(), lhsVarBank, lhs.literal(), s1);
+      record(rhs.clause(), rhsVarBank, rhs.literal(), s2);
       InferenceStore::instance()->recordConstraints(cl, firstConstraint,
         cnst->size());
     }

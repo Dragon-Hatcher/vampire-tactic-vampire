@@ -16,6 +16,7 @@
 #include "InequalityFactoring.hpp"
 #include "Debug/Assertion.hpp"
 #include "Debug/TimeProfiling.hpp"
+#include "Kernel/InferenceStore.hpp"
 
 #include "Saturation/SaturationAlgorithm.hpp"
 
@@ -137,6 +138,7 @@ Option<Clause*> InequalityFactoring::applyRule(
       "(j s1 + t1 >1 0)σ /≺ (k s2 + t2 >2 0 \\/ C)σ or (k s2 + t2 >2 0)σ /≺ (j s1 + t1 >1 0 \\/ C)σ",
       cond1 || cond2);
 
+  unsigned firstConstraint = concl.size();
   // adding `Cnst`
   concl.loadFromIterator(cnst->iterFifo());
 
@@ -163,6 +165,20 @@ Option<Clause*> InequalityFactoring::applyRule(
 
   Inference inf(GeneratingInference1(Kernel::InferenceRule::ALASCA_LITERAL_FACTORING, premise));
   auto out = Clause::fromStack(concl, inf);
+  // What the inference did to its premise: the literal, the two atoms it
+  // unified -- up to arithmetic, so equal as numbers rather than one term --
+  // and the unifier, which is discarded with the clause built; and the pairs
+  // it could not unify, which are literals of the conclusion.
+  {
+    Substitution s;
+    DHSet<unsigned, FnvHash, IdentityHash> vars;
+    premise->collectVars(vars);
+    for (unsigned v : iterTraits(vars.iterator()))
+      s.bindUnbound(v, uwa->subs().apply(TermList(v, false), 0));
+    InferenceStore::instance()->recordPremiseUse(out, premise, l1.literal(), s1, 0, s);
+    InferenceStore::instance()->recordOther(out, premise, s2);
+    InferenceStore::instance()->recordConstraints(out, firstConstraint, cnst->size());
+  }
   DEBUG("conclusion: ", *out)
   return Option<Clause*>(out);
 }

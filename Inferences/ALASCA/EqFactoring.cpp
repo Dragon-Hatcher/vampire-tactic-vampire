@@ -15,6 +15,7 @@
 
 #include "EqFactoring.hpp"
 #include "Debug/TimeProfiling.hpp"
+#include "Kernel/InferenceStore.hpp"
 
 #define DEBUG(...) // DBG(__VA_ARGS__)
 
@@ -110,11 +111,26 @@ Option<Clause*> EqFactoring::applyRule(SelectedEquality const& l1, SelectedEqual
   auto res = Literal::createEquality(false, t1σ, t2σ, srt);
   concl.push(res);
 
+  unsigned firstConstraint = concl.size();
   // adding Cnst
   concl.loadFromIterator(cnst->iterFifo());
 
   Inference inf(GeneratingInference1(Kernel::InferenceRule::ALASCA_EQ_FACTORING, l1.clause()));
   auto out = Clause::fromStack(concl, inf);
+  // What the inference did to its premise: the literal, the two atoms it
+  // unified -- up to arithmetic, so equal as numbers rather than one term --
+  // and the unifier, which is discarded with the clause built; and the pairs
+  // it could not unify, which are literals of the conclusion.
+  {
+    Substitution s;
+    DHSet<unsigned, FnvHash, IdentityHash> vars;
+    l1.clause()->collectVars(vars);
+    for (unsigned v : iterTraits(vars.iterator()))
+      s.bindUnbound(v, uwa.subs().apply(TermList(v, false), 0));
+    InferenceStore::instance()->recordPremiseUse(out, l1.clause(), l1.literal(), s1, 0, s);
+    InferenceStore::instance()->recordOther(out, l1.clause(), s2);
+    InferenceStore::instance()->recordConstraints(out, firstConstraint, cnst->size());
+  }
   DEBUG("out: ", *out);
   return Option<Clause*>(out);
 }
