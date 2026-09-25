@@ -195,11 +195,15 @@ void InferenceStore::recoverSubsumptionResolutionUses(Unit* u)
   recordPremiseUse(u, side, nullptr, TermList::empty(), 0, subst);
 }
 
-void InferenceStore::recordConstraints(Unit* generated, unsigned first,
+void InferenceStore::recordConstraints(Clause* generated, unsigned first,
   unsigned count)
 {
-  if (count)
-    _constraints.set(generated->number(), {first, count});
+  if (!count)
+    return;
+  Stack<Literal*> literals(count);
+  for (unsigned i = first; i < first + count; i++)
+    literals.push((*generated)[i]);
+  _constraints.set(generated->number(), std::move(literals));
 }
 
 void InferenceStore::recordLiteralImages(Unit* generated,
@@ -213,12 +217,9 @@ const InferenceStore::LiteralRewriting* InferenceStore::literalImages(Unit* u) c
   return _literalImages.findPtr(u->number());
 }
 
-std::pair<unsigned, unsigned> InferenceStore::constraints(Unit* u) const
+const Stack<Literal*>* InferenceStore::constraints(Unit* u) const
 {
-  std::pair<unsigned, unsigned> found;
-  if (_constraints.find(u->number(), found))
-    return found;
-  return {0, 0};
+  return _constraints.findPtr(u->number());
 }
 
 const Stack<InferenceStore::PremiseUse>* InferenceStore::premiseUses(Unit* u) const

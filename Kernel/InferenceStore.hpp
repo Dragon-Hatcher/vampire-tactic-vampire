@@ -182,11 +182,16 @@ public:
    * conclusion failing makes each of those pairs equal, and then the two terms
    * really are one; without knowing which literals they are, nothing replaying
    * the step could tell them from the ones it carried over.
+   *
+   * The inference says where it put them, @b count literals of @b generated
+   * from its @b first on, which is right as it has just built the clause; the
+   * literals themselves are what is kept, since literal selection permutes a
+   * clause in place later on.
    */
-  void recordConstraints(Unit* generated, unsigned first, unsigned count);
+  void recordConstraints(Clause* generated, unsigned first, unsigned count);
 
-  /** `{first, count}` of @b u's constraint literals, `{0, 0}` if none. */
-  std::pair<unsigned, unsigned> constraints(Unit* u) const;
+  /** @b u's constraint literals, null if it has none. */
+  const Stack<Literal*>* constraints(Unit* u) const;
 
   /**
    * What one literal of a literal-wise simplification's premise became.
@@ -398,7 +403,7 @@ private:
 
   // generated unit id -> how it used each premise
   DHMap<unsigned,Stack<PremiseUse>, FnvHash, IdentityHash> _premiseUses;
-  DHMap<unsigned,std::pair<unsigned,unsigned>, FnvHash, IdentityHash> _constraints;
+  DHMap<unsigned, Stack<Literal*>, FnvHash, IdentityHash> _constraints;
   DHMap<unsigned, LiteralRewriting, FnvHash, IdentityHash> _literalImages;
 };
 
