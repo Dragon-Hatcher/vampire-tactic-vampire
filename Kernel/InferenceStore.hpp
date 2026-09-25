@@ -169,6 +169,15 @@ public:
   void recordPremiseUse(Unit* generated, Clause* premise, Literal* on,
     TermList term, unsigned flags, const Substitution& subst);
 
+  /**
+   * Drops what was recorded of how @b u was inferred, @b u being destroyed.
+   *
+   * Every clause an inference builds is recorded, and most are thrown away
+   * by simplification or never used; a clause in a proof is never destroyed,
+   * since the clauses inferred from it keep it alive.
+   */
+  void forget(Unit* u);
+
   /** How @b u used each of its premises, empty when nothing was recorded. */
   const Stack<PremiseUse>* premiseUses(Unit* u) const;
 

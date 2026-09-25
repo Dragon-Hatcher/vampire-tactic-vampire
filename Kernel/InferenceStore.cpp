@@ -195,6 +195,13 @@ void InferenceStore::recoverSubsumptionResolutionUses(Unit* u)
   recordPremiseUse(u, side, nullptr, TermList::empty(), 0, subst);
 }
 
+void InferenceStore::forget(Unit* u)
+{
+  _premiseUses.remove(u->number());
+  _constraints.remove(u->number());
+  _literalImages.remove(u->number());
+}
+
 void InferenceStore::recordConstraints(Clause* generated, unsigned first,
   unsigned count)
 {

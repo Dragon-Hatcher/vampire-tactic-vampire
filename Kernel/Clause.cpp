@@ -31,6 +31,7 @@
 #include "Shell/Options.hpp"
 
 #include "Inference.hpp"
+#include "InferenceStore.hpp"
 #include "Signature.hpp"
 #include "Term.hpp"
 #include "TermIterators.hpp"
@@ -188,6 +189,7 @@ void Clause::destroy()
         (env.options->questionAnswering() == Options::QuestionAnsweringMode::SYNTHESIS)) {
       env.proofExtra.remove(cl);
     }
+    InferenceStore::instance()->forget(cl);
     Inference::Iterator it = cl->_inference.iterator();
     while (cl->_inference.hasNext(it)) {
       Unit* refU = cl->_inference.next(it);

@@ -213,10 +213,12 @@ struct URResolution<synthesis>::Item
     // The literal that survives is stated with its variables normalised, so
     // what the premises were bound to is normalised the same way.
     Renaming norm;
+    bool renamed = false;
     if(single) {
       if (!_ansLit || _ansLit->ground()) {
         norm.normalizeVariables(single);
         single = norm.apply(single);
+        renamed = true;
       }
       res = Clause::fromIterator(concatIters(getSingletonIterator(single), std::move(it)), inf);
     }
@@ -226,8 +228,11 @@ struct URResolution<synthesis>::Item
 
     // A variable the surviving literal does not mention is not in the
     // conclusion at all, so it can stand for anything as long as both the
-    // clause and the premise resolved with it say the same.
-    auto normalised = [&norm](Substitution& s) {
+    // clause and the premise resolved with it say the same -- and it is
+    // numbered after the conclusion's own, so that it is not taken for one of
+    // them (of another sort, perhaps). `norm` is shared by every premise's
+    // images, which all speak of the last unifier's variables.
+    auto normalised = [&norm, renamed](Substitution& s) {
       Substitution renaming;
       Stack<std::pair<unsigned, TermList>> items;
       for (auto item : iterTraits(s.items())) {
@@ -238,8 +243,8 @@ struct URResolution<synthesis>::Item
         while (vit.hasNext()) {
           unsigned v = vit.next().var();
           TermList bound;
-          if (!renaming.findBinding(v, bound) && norm.contains(v)) {
-            renaming.bindUnbound(v, TermList(norm.get(v), false));
+          if (renamed && !renaming.findBinding(v, bound)) {
+            renaming.bindUnbound(v, TermList(norm.getOrBind(v), false));
           }
         }
       }
