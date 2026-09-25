@@ -251,16 +251,15 @@ struct URResolution<synthesis>::Item
     };
     // In the order the premises are stated: the clause, then the units, each
     // against the literal of the clause it resolved away.
-    InferenceStore::instance()->recordPremiseUse(res, _orig,
-      InferenceStore::literalNone, TermList::empty(), 0,
-      normalised(const_cast<Item*>(this)->_origSubst));
+    InferenceStore::instance()->recordPremiseUse(res, _orig, TermList::empty(),
+      0, normalised(const_cast<Item*>(this)->_origSubst));
     for (unsigned i = _premiseSubsts.size(); i-- > 0; ) {
       if (!_premises[i]) {
         continue;
       }
       InferenceStore::instance()->recordPremiseUse(res, _premises[i],
-        _origIndex[i], TermList::empty(), 0,
-        normalised(const_cast<Item*>(this)->_premiseSubsts[i]));
+        (*_orig)[_origIndex[i]], TermList::empty(), 0,
+        normalised(const_cast<Item*>(this)->_premiseSubsts[i]), _orig);
     }
     return res;
   }

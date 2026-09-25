@@ -741,8 +741,7 @@ Clause* FunctionDefinition::applyDefinitions(Clause* cl)
   UnitList::push(cl, premises);
   auto res = Clause::fromStack(*resLits, NonspecificInferenceMany(InferenceRule::DEFINITION_UNFOLDING, premises));
   for (auto [defCl, lhs] : defined) {
-    InferenceStore::instance()->recordPremiseUse(res, defCl,
-      InferenceStore::literalNone, TermList(lhs), 0,
+    InferenceStore::instance()->recordPremiseUse(res, defCl, TermList(lhs), 0,
       Stack<std::pair<unsigned, TermList>>());
   }
   if(env.options->proofExtra() == Options::ProofExtra::FULL)

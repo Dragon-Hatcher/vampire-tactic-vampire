@@ -116,19 +116,17 @@ public:
    */
   struct PremiseUse {
     unsigned premise;
-    /** Index of the literal acted on, or `literalNone` if none was. */
-    unsigned literal;
     /**
-     * The literal acted on, and the clause it belongs to, when the inference
-     * named one.
+     * The literal acted on, and the clause it is one of -- the premise itself,
+     * unless the inference says otherwise -- or null if none was.
      *
-     * Literal selection permutes a clause's literals in place, bringing the
-     * selected ones to the front, so the index an inference saw is not the
-     * index the clause ends up with. The literal itself does not move, so it
-     * is kept and the index worked out again once nothing more will happen to
-     * the clause.
+     * Only the literal is kept, never where it sits: literal selection
+     * permutes a clause's literals in place, bringing the selected ones to the
+     * front, so an index an inference saw need not be the index the clause
+     * ends up with. The literal itself does not move, and its index is worked
+     * out once nothing more will happen to the clause.
      */
-    Clause* premiseClause = nullptr;
+    Clause* in = nullptr;
     Literal* on = nullptr;
     /**
      * The term the inference acted on within that literal, empty if none.
@@ -143,8 +141,6 @@ public:
     Stack<std::pair<unsigned, TermList>> bindings;
   };
 
-  static const unsigned literalNone = UINT_MAX;
-
   /**
    * The inference rewrote the term it acted on throughout the premise, rather
    * than only in the literal recorded against it: what superposition does when
@@ -152,9 +148,17 @@ public:
    */
   static const unsigned rewritesWholePremise = 1;
 
-  void recordPremiseUse(Unit* generated, Unit* premise, unsigned literal,
+  /** A use that acted on none of @b premise's literals. */
+  void recordPremiseUse(Unit* generated, Unit* premise, TermList term,
+    unsigned flags, const Stack<std::pair<unsigned, TermList>>& bindings);
+
+  /**
+   * A use that acted on the literal @b on, null if on none: one of @b in, or
+   * of @b premise when @b in is null.
+   */
+  void recordPremiseUse(Unit* generated, Clause* premise, Literal* on,
     TermList term, unsigned flags,
-    const Stack<std::pair<unsigned, TermList>>& bindings);
+    const Stack<std::pair<unsigned, TermList>>& bindings, Clause* in = nullptr);
 
   /**
    * The same, for an inference that already holds the substitution it applied

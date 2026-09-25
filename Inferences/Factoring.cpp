@@ -113,14 +113,7 @@ public:
       for (unsigned v : iterTraits(vars.iterator())) {
         bindings.push({v, subst.apply(TermList(v, false), 0)});
       }
-      unsigned literal = InferenceStore::literalNone;
-      for (unsigned i = 0; i < _cl->length(); i++) {
-        if ((*_cl)[i] == skipped) {
-          literal = i;
-          break;
-        }
-      }
-      InferenceStore::instance()->recordPremiseUse(cl, _cl, literal,
+      InferenceStore::instance()->recordPremiseUse(cl, _cl, skipped,
         TermList::empty(), 0, bindings);
     }
     return cl;

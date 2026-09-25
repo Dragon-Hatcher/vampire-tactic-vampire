@@ -915,7 +915,7 @@ static void recordComponentRenaming(Unit* generated, Unit* definition,
     bindings.push({v, renaming.apply(v)});
   }
   InferenceStore::instance()->recordPremiseUse(generated, definition,
-    InferenceStore::literalNone, TermList::empty(), 0, bindings);
+    TermList::empty(), 0, bindings);
 }
 
 bool Splitter::handleNonSplittable(Clause* cl)

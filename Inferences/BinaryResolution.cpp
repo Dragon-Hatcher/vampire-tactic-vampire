@@ -230,14 +230,7 @@ Clause* BinaryResolution::generateClause(Clause* queryCl, Literal* queryLit, Cla
       for (unsigned v : iterTraits(vars.iterator())) {
         bindings.push({v, apply(TermList(v, false))});
       }
-      unsigned literal = InferenceStore::literalNone;
-      for (unsigned i = 0; i < premise->length(); i++) {
-        if ((*premise)[i] == on) {
-          literal = i;
-          break;
-        }
-      }
-      InferenceStore::instance()->recordPremiseUse(cl, premise, literal,
+      InferenceStore::instance()->recordPremiseUse(cl, premise, on,
         TermList::empty(), 0, bindings);
     };
     record(queryCl, queryLit, [&subs](TermList t) { return subs->applyToQuery(t); });

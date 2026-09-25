@@ -110,13 +110,22 @@ void InferenceStore::recordIntroducedSkolemSymbol(Unit* u, Signature::Symbol* sy
 }
 
 void InferenceStore::recordPremiseUse(Unit* generated, Unit* premise,
-  unsigned literal, TermList term, unsigned flags,
+  TermList term, unsigned flags,
   const Stack<std::pair<unsigned, TermList>>& bindings)
 {
   Stack<PremiseUse>* uses;
   _premiseUses.getValuePtr(generated->number(), uses);
-  uses->push({premise->number(), literal, nullptr, nullptr, term, flags,
-    bindings});
+  uses->push({premise->number(), nullptr, nullptr, term, flags, bindings});
+}
+
+void InferenceStore::recordPremiseUse(Unit* generated, Clause* premise,
+  Literal* on, TermList term, unsigned flags,
+  const Stack<std::pair<unsigned, TermList>>& bindings, Clause* in)
+{
+  Stack<PremiseUse>* uses;
+  _premiseUses.getValuePtr(generated->number(), uses);
+  uses->push({premise->number(), on ? (in ? in : premise) : nullptr, on, term,
+    flags, bindings});
 }
 
 void InferenceStore::recordPremiseUse(Unit* generated, Clause* premise,
@@ -128,21 +137,7 @@ void InferenceStore::recordPremiseUse(Unit* generated, Clause* premise,
   for (unsigned v : iterTraits(vars.iterator())) {
     bindings.push({v, subst.apply(v)});
   }
-  unsigned literal = literalNone;
-  if (on) {
-    for (unsigned i = 0; i < premise->length(); i++) {
-      if ((*premise)[i] == on) {
-        literal = i;
-        break;
-      }
-    }
-  }
-  recordPremiseUse(generated, premise, literal, term, flags, bindings);
-  // The index is worked out again when the clause is done with; see PremiseUse.
-  Stack<PremiseUse>* uses;
-  _premiseUses.getValuePtr(generated->number(), uses);
-  uses->top().premiseClause = premise;
-  uses->top().on = on;
+  recordPremiseUse(generated, premise, on, term, flags, bindings);
 }
 
 void InferenceStore::recoverSubsumptionResolutionUses(Unit* u)
