@@ -224,6 +224,11 @@ public:
     PUSH_UNARY_MINUS = 4,
     ALASCA_NORMALIZATION = 5,
     CANCELLATION = 6,
+    /**
+     * Arithmetic subterm generalization: each literal is the premise's at
+     * the recorded witness, up to the identities of a ring.
+     */
+    GENERALIZATION = 7,
   };
 
   /** How a literal-wise simplification rewrote its premise. */

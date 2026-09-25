@@ -92,6 +92,8 @@ SimplifyingGeneratingInference1::Result generalizeBottomUp(Clause* cl, EvalFn ev
   DEBUG_CODE(bool anyChange = false);
   bool oneLess = false;
   bool allLessEq = true;
+  // What each literal became, for replaying the step.
+  Stack<InferenceStore::LiteralImage> images(cl->size());
 
   auto stack = iterTraits(cl->iterLits())
     .map([&](Literal* lit) -> Literal* {
@@ -114,6 +116,7 @@ SimplifyingGeneratingInference1::Result generalizeBottomUp(Clause* cl, EvalFn ev
         auto generalizedLit = Literal::create(
             lit, 
             args.begin());
+        images.push({lit, generalizedLit, RationalConstantType(1)});
 
         if (eval.eval.doOrderingCheck) {
 
@@ -146,6 +149,8 @@ SimplifyingGeneratingInference1::Result generalizeBottomUp(Clause* cl, EvalFn ev
     InferenceStore::instance()->recordPremiseUse(simplified, cl, nullptr,
       TermList::empty(), 0, *witness);
   }
+  InferenceStore::instance()->recordLiteralImages(simplified,
+    InferenceStore::LiteralProcedure::GENERALIZATION, std::move(images));
   return SimplifyingGeneratingInference1::Result{
     .simplified = simplified,
     .premiseRedundant = (allLessEq && oneLess)
