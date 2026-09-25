@@ -201,6 +201,9 @@ bool ForwardDemodulation<higherOrder>::perform(Clause* cl, Clause*& replacement,
             }
             InferenceStore::instance()->recordPremiseUse(replacement, cl, lit,
               trm, 0, Substitution());
+            InferenceStore::instance()->recordRewritten(replacement, cl, lit, resLit,
+              lit->isEquality() ? EqHelper::replace(lit->termArg(0), trm, rhsS)
+                                : TermList::empty());
             InferenceStore::instance()->recordPremiseUse(replacement,
               demodulator, equation, equation->termArg(side), 0, subst);
             break;

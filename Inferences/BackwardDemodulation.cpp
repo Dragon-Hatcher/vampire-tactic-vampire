@@ -176,6 +176,11 @@ struct BackwardDemodulation<higherOrder>::ResultFn
       }
       InferenceStore::instance()->recordPremiseUse(replacement,
         qr.data->clause, qr.data->literal, lhsS, 0, Substitution());
+      InferenceStore::instance()->recordRewritten(replacement, qr.data->clause,
+        qr.data->literal, resLit,
+        qr.data->literal->isEquality()
+          ? EqHelper::replace(qr.data->literal->termArg(0), lhsS, rhsS)
+          : TermList::empty());
       InferenceStore::instance()->recordPremiseUse(replacement, _cl, _eqLit,
         _eqLit->termArg(side), 0, subst);
       break;

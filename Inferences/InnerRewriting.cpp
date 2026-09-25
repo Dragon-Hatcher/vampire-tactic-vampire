@@ -48,6 +48,9 @@ Clause* InnerRewriting::simplify(Clause* cl)
             }
 
             RStack<Literal*> resLits;
+            // The literals the rewrite changed, and what each became.
+            Stack<std::pair<Literal*, Literal*>> rewritten;
+            rewritten.push({lit, nLit});
 
             for (unsigned k = 0; k < len; k++) {
               if (k == i) {
@@ -63,6 +66,9 @@ Clause* InnerRewriting::simplify(Clause* cl)
                   env.statistics->innerRewritesToEqTaut++;
                   return nullptr;
                 }
+                if (rLit != oLit) {
+                  rewritten.push({oLit, rLit});
+                }
                 resLits->push(rLit);
               }
             }
@@ -71,6 +77,11 @@ Clause* InnerRewriting::simplify(Clause* cl)
             // The disequality rewritten with, and the side rewritten away.
             InferenceStore::instance()->recordPremiseUse(res, cl, rwLit, lhs, 0,
               Stack<std::pair<unsigned, TermList>>());
+            for (auto [from, to] : iterTraits(rewritten.iter())) {
+              InferenceStore::instance()->recordRewritten(res, cl, from, to,
+                from->isEquality() ? EqHelper::replace(from->termArg(0), lhs, rhs)
+                                   : TermList::empty());
+            }
             return res;
           }
         }

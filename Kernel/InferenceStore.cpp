@@ -194,6 +194,22 @@ void InferenceStore::recoverSubsumptionResolutionUses(Unit* u)
   recordPremiseUse(u, side, nullptr, TermList::empty(), 0, subst);
 }
 
+void InferenceStore::recordRewritten(Unit* generated, Unit* premise, Literal* from,
+  Literal* to, TermList rewrittenLhs)
+{
+  Stack<PremiseUse>* uses = _premiseUses.findPtr(generated->number());
+  ASS(uses);
+  for (unsigned i = uses->size(); i-- > 0;) {
+    PremiseUse& use = (*uses)[i];
+    if (use.premise != premise->number())
+      continue;
+    bool turned = to->isEquality() && *to->nthArgument(0) != rewrittenLhs;
+    use.rewritten.push({from, to, turned});
+    return;
+  }
+  ASSERTION_VIOLATION;
+}
+
 void InferenceStore::forget(Unit* u)
 {
   _premiseUses.remove(u->number());

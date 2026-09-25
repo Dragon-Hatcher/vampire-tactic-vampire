@@ -385,13 +385,20 @@ Clause* Superposition<higherOrder>::performSuperposition(
 
   res->push(tgtLitS);
   unsigned weight=tgtLitS->weight();
+  // The rewritten premise's other literals the rewrite changed, as well as
+  // substituted into, and what each became.
+  Stack<std::pair<Literal*, Literal*>> alsoRewritten;
   for(unsigned i=0;i<rwLength;i++) {
     Literal* curr=(*rwClause)[i];
     if(curr!=rwLit) {
       Literal* currAfter = subst->apply(curr, !eqIsResult);
 
       if (doSimS) {
+        Literal* substituted = currAfter;
         currAfter = EqHelper::replace(currAfter,rwTermS,tgtTermS);
+        if (currAfter != substituted) {
+          alsoRewritten.push({curr, currAfter});
+        }
       }
 
       if(EqHelper::isEqTautology(currAfter)) {
@@ -517,6 +524,16 @@ Clause* Superposition<higherOrder>::performSuperposition(
     };
     record(rwClause, rwLit, rwTerm, !eqIsResult,
       doSimS ? InferenceStore::rewritesWholePremise : 0);
+    auto rewritten = [&](Literal* from, Literal* to) {
+      TermList lhs = from->isEquality()
+        ? EqHelper::replace(subst->apply(from->termArg(0), !eqIsResult), rwTermS, tgtTermS)
+        : TermList::empty();
+      InferenceStore::instance()->recordRewritten(clause, rwClause, from, to, lhs);
+    };
+    rewritten(rwLit, tgtLitS);
+    for (auto [from, to] : iterTraits(alsoRewritten.iter())) {
+      rewritten(from, to);
+    }
     record(eqClause, eqLit, eqLHS, eqIsResult, 0);
   }
 

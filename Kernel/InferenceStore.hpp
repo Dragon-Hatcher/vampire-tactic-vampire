@@ -114,6 +114,19 @@ public:
    * substitution again by matching the conclusion against the premises; this
    * records it instead.
    */
+  /**
+   * A literal of a premise the inference rewrote -- after substituting into
+   * it, where it substituted -- rather than only substituted into, and what
+   * it became. An equation is shared with its sides either way round, so
+   * @b turned says whether @b to has them the other way round from how the
+   * inference rewrote them.
+   */
+  struct RewrittenLiteral {
+    Literal* from;
+    Literal* to;
+    bool turned;
+  };
+
   struct PremiseUse {
     unsigned premise;
     /**
@@ -139,6 +152,8 @@ public:
     /** `rewritesWholePremise`, or zero. */
     unsigned flags;
     Stack<std::pair<unsigned, TermList>> bindings;
+    /** The premise's literals the inference rewrote, `recordRewritten`. */
+    Stack<RewrittenLiteral> rewritten = Stack<RewrittenLiteral>();
   };
 
   /**
@@ -177,6 +192,15 @@ public:
    * since the clauses inferred from it keep it alive.
    */
   void forget(Unit* u);
+
+  /**
+   * That the inference making @b generated rewrote the literal @b from of
+   * @b premise into @b to, where @b rewrittenLhs is what it rewrote the
+   * literal's first argument into (empty for a literal that is no equation).
+   * Recorded against the last use of @b premise recorded for @b generated.
+   */
+  void recordRewritten(Unit* generated, Unit* premise, Literal* from, Literal* to,
+    TermList rewrittenLhs);
 
   /** How @b u used each of its premises, empty when nothing was recorded. */
   const Stack<PremiseUse>* premiseUses(Unit* u) const;
