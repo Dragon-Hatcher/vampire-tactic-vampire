@@ -71,6 +71,7 @@
 #include "Kernel/Matcher.hpp"
 #include "Lib/Environment.hpp"
 #include "Lib/Int.hpp"
+#include "Lib/Timer.hpp"
 #include <algorithm>
 #include <type_traits>
 
@@ -333,6 +334,11 @@ bool SATSubsumptionAndResolution::checkAndAddMatch(Literal* l_i,
   ASS_EQ(l_i->functor(), m_j->functor())
   ASS_EQ(l_i->polarity() == m_j->polarity(), polarity)
 
+  // this is quadratic in the clause lengths, so count it as work
+  static unsigned pairsTried = 0;
+  static const unsigned PAIRS_PER_BEAT = 20;
+  if (++pairsTried % PAIRS_PER_BEAT == 0)
+    Timer::beat();
   bool match = false;
   {
     auto binder = _bindingsManager.start_binder();
