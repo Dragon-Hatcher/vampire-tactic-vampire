@@ -109,3 +109,25 @@ TEST_GENERATION(test_hol_02,
         clause({ lam(s, x.sort(s)) != lam(s, y.sort(s)) })
       ))
     )
+
+#undef MY_SYNTAX_SUGAR
+#define MY_SYNTAX_SUGAR                               \
+  NUMBER_SUGAR(Int)                                   \
+  DECL_DEFAULT_VARS                                   \
+  DECL_FUNC(f, {Int}, Int)                            \
+  DECL_FUNC(g, {Int}, Int)                            \
+  DECL_CONST(a, Int)
+
+// x occurs in f(a + g(x)) under a sum, where it might cancel out, so
+// unification with abstraction keeps x = f(a + g(x)) as a constraint rather
+// than failing; no binding solves it, so it has to stay.
+TEST_GENERATION(test_uwa_occurs_01,
+    Generation::AsymmetricTest()
+      .input(clause({ selected(x != f(a + g(x))) }))
+      .options({
+        { "unification_with_abstraction", "alasca_main" },
+      })
+      .expected( exactly(
+        clause({ x != f(a + g(x)) })
+      ))
+    )

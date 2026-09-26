@@ -129,9 +129,14 @@ ClauseIterator EqualityResolution::generateClauses(Clause* premise)
         return ClauseIterator::getEmpty();
       }
 
+      auto ord = _salg.getOptions().literalMaximalityAftercheck() && _salg.getLiteralSelector().isBGComplete() ? &_salg.getOrdering() : nullptr;
+      // as in superposition, higher-order unification is only for higher-order problems
+      if (!env.higherOrder()) {
+        return pvi(getSingletonIterator(unifierToClause(premise, lit, &unif, ord)));
+      }
       return pvi(iterTraits(vi(new HOL::AbstractingWrapper(&unif, _salg.getOptions().higherOrderUnifDepth(), funcExt)))
-        .map([this,premise,lit](AbstractingUnifier* unif) {
-          return unifierToClause(premise, lit, unif, _salg.getOptions().literalMaximalityAftercheck() && _salg.getLiteralSelector().isBGComplete() ? &_salg.getOrdering() : nullptr);
+        .map([premise,lit,ord](AbstractingUnifier* unif) {
+          return unifierToClause(premise, lit, unif, ord);
         }));
       })
     .filter(NonzeroFn()));
