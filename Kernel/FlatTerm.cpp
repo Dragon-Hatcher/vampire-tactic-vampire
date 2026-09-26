@@ -16,6 +16,7 @@
 
 #include "Lib/Allocator.hpp"
 #include "Lib/DArray.hpp"
+#include "Lib/Timer.hpp"
 
 #include "SortHelper.hpp"
 #include "Term.hpp"
@@ -85,9 +86,21 @@ size_t FlatTerm::getEntryCount(Term* t)
   return t->weight()*FUNCTION_ENTRY_COUNT-(FUNCTION_ENTRY_COUNT-1)*t->numVarOccs();
 }
 
+/**
+ * Heartbeats for flattening, and for copying, @b entries entries: the work
+ * is proportional to the size of the term, and a term large enough to take
+ * milliseconds to flatten is one a strategy can otherwise spend its whole
+ * budget on -- forward subsumption flattens every literal of every clause it
+ * is asked about -- while counting nothing. Whole multiples only, so the many
+ * small terms cost what they did.
+ */
+static const size_t ENTRIES_PER_CREATE_BEAT = 768;
+static const size_t ENTRIES_PER_COPY_BEAT = 6144;
+
 FlatTerm* FlatTerm::create(TermList t)
 {
   size_t entries = t.isVar() ? 1 : getEntryCount</*mightBeLiteral=*/true>(t.term());
+  Timer::beat(entries / ENTRIES_PER_CREATE_BEAT);
   auto res = new(entries) FlatTerm(entries);
 
   size_t pos = 0;
@@ -103,6 +116,7 @@ FlatTerm* FlatTerm::create(TermStack ts)
   for (auto& tl : ts) {
     entries += tl.isVar() ? 1 : getEntryCount</*mightBeLiteral=*/true>(tl.term());
   }
+  Timer::beat(entries / ENTRIES_PER_CREATE_BEAT);
 
   FlatTerm* res=new(entries) FlatTerm(entries);
   size_t fti=0;
@@ -118,6 +132,7 @@ FlatTerm* FlatTerm::create(TermStack ts)
 FlatTerm* FlatTerm::copy(const FlatTerm* ft)
 {
   size_t entries=ft->_length;
+  Timer::beat(entries / ENTRIES_PER_COPY_BEAT);
   FlatTerm* res=new(entries) FlatTerm(entries);
   memcpy(res->_data, ft->_data, entries*sizeof(Entry));
   return res;

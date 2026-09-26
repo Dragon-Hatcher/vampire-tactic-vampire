@@ -68,6 +68,7 @@
    * 5. Substitution compatibility : The substitution σ is compatible with all the sub-substitutions.
    */
 
+#include "Lib/Timer.hpp"
 #include "Kernel/Matcher.hpp"
 #include "Lib/Environment.hpp"
 #include "Lib/Int.hpp"
@@ -333,6 +334,14 @@ bool SATSubsumptionAndResolution::checkAndAddMatch(Literal* l_i,
   ASS_EQ(l_i->functor(), m_j->functor())
   ASS_EQ(l_i->polarity() == m_j->polarity(), polarity)
 
+  // Heartbeats for the pairs of literals tried: the work of filling the
+  // matches is this, one pair per side literal and main literal, and clauses
+  // sharing many predicates make it quadratic in their length. A pair costs
+  // far less than a beat is worth, so one beat per `PAIRS_PER_BEAT` of them.
+  static unsigned pairsTried = 0;
+  static const unsigned PAIRS_PER_BEAT = 20;
+  if (++pairsTried % PAIRS_PER_BEAT == 0)
+    Timer::beat();
   bool match = false;
   {
     auto binder = _bindingsManager.start_binder();
