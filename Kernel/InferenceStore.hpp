@@ -92,6 +92,28 @@ public:
   void recordIntroducedSymbol(Unit* u, Signature::Symbol* sym);
   /** The first symbol @b u was recorded to introduce, or nullptr. */
   Signature::Symbol* firstIntroducedSymbol(Unit* u) const;
+
+  /**
+   * That pure predicate removal replaced @b pred, which occurs with one
+   * polarity only, by @b value, the truth value that satisfies it. Predicates
+   * are found pure one after another, and are numbered in that order.
+   */
+  void recordPurePredicate(unsigned pred, bool value)
+  { _purePredicates.insert(pred, {value, _purePredicates.size()}); }
+  /** What pure predicate removal replaced @b pred by, and its number, if it did. */
+  bool purePredicate(unsigned pred, bool& value, unsigned& order) const {
+    std::pair<bool, unsigned> found;
+    if (!_purePredicates.find(pred, found)) return false;
+    value = found.first;
+    order = found.second;
+    return true;
+  }
+  /**
+   * How many predicates had been found pure when @b u was made of its
+   * premise: those it replaced, the rest being replaced by later steps.
+   */
+  void recordPureStage(Unit* u) { _pureStages.insert(u->number(), _purePredicates.size()); }
+  bool pureStage(Unit* u, unsigned& stage) const { return _pureStages.find(u->number(), stage); }
   void recordIntroducedSkolemSymbol(Unit* u, Signature::Symbol* sym, unsigned replacedVar, Term* symTerm);
   void recordIntroducedSplitName(Unit* u, std::string name);
 
@@ -543,6 +565,8 @@ private:
   typedef Stack<Signature::Symbol*> SymbolStack;
   // unit id -> stack of introduced symbols (in order of introduction)
   DHMap<unsigned,SymbolStack, FnvHash, IdentityHash> _introducedSymbols;
+  DHMap<unsigned, std::pair<bool, unsigned>> _purePredicates;
+  DHMap<unsigned, unsigned> _pureStages;
   // symbol id -> existential variable name (number) that was replaced by the symbol
   DHMap<Signature::Symbol*, unsigned, FnvHash, PtrIdentityHash> _introducedSymbolReplacedVars;
   // symbol id -> the term that is introduced when introducing the skolem symbol

@@ -24,6 +24,7 @@
 #include "Kernel/Formula.hpp"
 #include "Kernel/FormulaUnit.hpp"
 #include "Kernel/Inference.hpp"
+#include "Kernel/InferenceStore.hpp"
 #include "Kernel/Problem.hpp"
 #include "Kernel/Signature.hpp"
 #include "Kernel/SubformulaIterator.hpp"
@@ -260,6 +261,8 @@ void PredicateDefinition::replacePurePred(unsigned pred, ReplMap& replacements)
   ASS(pd.pocc==0 || pd.nocc==0);
 
   _purePreds.insert(pred, pd.nocc==0);
+  // For replay: which value the predicate became.
+  InferenceStore::instance()->recordPurePredicate(pred, pd.nocc==0);
   if(_processedPrb) {
     _processedPrb->addTrivialPredicate(pred, pd.nocc==0);
   }
@@ -375,7 +378,9 @@ FormulaUnit* PredicateDefinition::replacePurePredicates(FormulaUnit* u)
 {
   Formula* resf=replacePurePredicates(u->formula());
   if(resf!=u->formula()) {
-    return new FormulaUnit(resf,NonspecificInference1(InferenceRule::PURE_PREDICATE_REMOVAL, u));
+    FormulaUnit* res = new FormulaUnit(resf,NonspecificInference1(InferenceRule::PURE_PREDICATE_REMOVAL, u));
+    InferenceStore::instance()->recordPureStage(res);
+    return res;
   }
   else {
     return u;
