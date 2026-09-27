@@ -184,8 +184,9 @@ public:
     /**
      * A second term of the premise the inference acted on, empty if it acted
      * on one: what an arithmetic equation `k s + t = 0` rewrote `s` to,
-     * `-t/k`, which is no side of it; or the atom a factoring unified `term`
-     * with. `recordOther`.
+     * `-t/k`, which is no side of it; the atom an inequality factoring
+     * unified `term` with; or, for an equality factoring, the other side of
+     * the equation `term` is one side of. `recordOther`.
      */
     TermList other = TermList::empty();
     /**
@@ -235,6 +236,21 @@ public:
    */
   void recordPremiseUse(Unit* generated, Clause* premise, Literal* on,
     TermList term, unsigned flags, const Substitution& subst);
+
+  /**
+   * What a unifier @b subs makes of @b premise's variables in @b bank: the
+   * substitution the inference took the premise at, for `recordPremiseUse`.
+   */
+  template<class Premise, class Subs, class S = Substitution>
+  static S bankSubstitution(Premise* premise, Subs&& subs, unsigned bank)
+  {
+    S s;
+    DHSet<unsigned, FnvHash, IdentityHash> vars;
+    premise->collectVars(vars);
+    for (unsigned v : iterTraits(vars.iterator()))
+      s.bindUnbound(v, subs.apply(TermList(v, false), bank));
+    return s;
+  }
 
   /**
    * Drops what was recorded of how @b u was inferred, @b u being destroyed.

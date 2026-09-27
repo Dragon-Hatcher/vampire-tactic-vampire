@@ -170,11 +170,7 @@ Option<Clause*> InequalityFactoring::applyRule(
   // and the unifier, which is discarded with the clause built; and the pairs
   // it could not unify, which are literals of the conclusion.
   {
-    Substitution s;
-    DHSet<unsigned, FnvHash, IdentityHash> vars;
-    premise->collectVars(vars);
-    for (unsigned v : iterTraits(vars.iterator()))
-      s.bindUnbound(v, uwa->subs().apply(TermList(v, false), 0));
+    Substitution s = InferenceStore::bankSubstitution(premise, uwa->subs(), 0);
     // Each comparison factored, with the coefficient of its atom: the one the
     // pivot is made of first, then the one carried.
     InferenceStore::instance()->recordPremiseUse(out, premise, l1.literal(), s1, 0, s);

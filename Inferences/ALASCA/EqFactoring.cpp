@@ -122,11 +122,7 @@ Option<Clause*> EqFactoring::applyRule(SelectedEquality const& l1, SelectedEqual
   // and the unifier, which is discarded with the clause built; and the pairs
   // it could not unify, which are literals of the conclusion.
   {
-    Substitution s;
-    DHSet<unsigned, FnvHash, IdentityHash> vars;
-    l1.clause()->collectVars(vars);
-    for (unsigned v : iterTraits(vars.iterator()))
-      s.bindUnbound(v, uwa.subs().apply(TermList(v, false), 0));
+    Substitution s = InferenceStore::bankSubstitution(l1.clause(), uwa.subs(), 0);
     // Each equation factored, `s ≈ t`, with its coefficient where it is
     // arithmetic, `k s + … = 0`: the one carried first, then the one the
     // disequality of their other sides takes the place of.

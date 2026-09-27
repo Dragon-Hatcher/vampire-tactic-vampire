@@ -163,11 +163,7 @@ Option<Clause*> SuperpositionConf::applyRule_(
   {
     auto record = [&](Clause* premise, unsigned bank, Literal* on, TermList term,
                       unsigned flags) {
-      Substitution s;
-      DHSet<unsigned, FnvHash, IdentityHash> vars;
-      premise->collectVars(vars);
-      for (unsigned v : iterTraits(vars.iterator()))
-        s.bindUnbound(v, uwa.subs().apply(TermList(v, false), bank));
+      Substitution s = InferenceStore::bankSubstitution(premise, uwa.subs(), bank);
       InferenceStore::instance()->recordPremiseUse(out, premise, on, term, flags, s);
     };
     record(lhs.clause(), lhsVarBank, lhs.literal(), lhs.biggerSide(), 0);

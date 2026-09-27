@@ -318,7 +318,8 @@ void InferenceStore::recordIntroduced(Clause* generated,
   const Stack<TermList>& terms)
 {
   ASS(sources.isEmpty() || sources.size() == literals.size());
-  _introduced.set(generated->number(), {literals, variant, sources, terms});
+  // One record per clause: a second would silently replace the first.
+  ALWAYS(_introduced.insert(generated->number(), {literals, variant, sources, terms}));
 }
 
 const InferenceStore::Introduced* InferenceStore::introduced(Unit* u) const

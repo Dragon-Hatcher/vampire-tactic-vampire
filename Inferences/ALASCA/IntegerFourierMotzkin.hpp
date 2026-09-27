@@ -59,11 +59,7 @@ struct IntegerFourierMotzkinConf
       AbstractingUnifier& uwa)
   {
     auto record = [&](Clause* premise, unsigned bank, Literal* on, TermList term, TermList other) {
-      Substitution s;
-      DHSet<unsigned, FnvHash, IdentityHash> vars;
-      premise->collectVars(vars);
-      for (unsigned v : iterTraits(vars.iterator()))
-        s.bindUnbound(v, uwa.subs().apply(TermList(v, false), bank));
+      Substitution s = InferenceStore::bankSubstitution(premise, uwa.subs(), bank);
       InferenceStore::instance()->recordPremiseUse(cl, premise, on, term, 0, s);
       InferenceStore::instance()->recordOther(cl, premise, other);
     };

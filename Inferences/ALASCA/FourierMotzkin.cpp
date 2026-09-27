@@ -183,11 +183,7 @@ Option<Clause*> FourierMotzkinConf::applyRule_(
       // The atom of each premise it unified, too: its unifier works up to
       // arithmetic, so the two can be equal as numbers rather than one term.
       auto record = [&](Clause* premise, unsigned bank, Literal* on, TermList atom) {
-        Substitution s;
-        DHSet<unsigned, FnvHash, IdentityHash> vars;
-        premise->collectVars(vars);
-        for (unsigned v : iterTraits(vars.iterator()))
-          s.bindUnbound(v, uwa.subs().apply(TermList(v, false), bank));
+        Substitution s = InferenceStore::bankSubstitution(premise, uwa.subs(), bank);
         InferenceStore::instance()->recordPremiseUse(cl, premise, on, atom, 0, s);
       };
       // Each premise's coefficient of the atom as its other term: `j` of the

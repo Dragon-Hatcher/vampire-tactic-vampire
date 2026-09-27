@@ -26,9 +26,9 @@ using namespace Kernel;
 using namespace Indexing;
 using namespace Saturation;
 
-/* an inference rule that rewrites
- *  s >= t ==> s > t \/ s == t
- *  and
+/* an inference rule that rewrites 
+ *  s >= t ==> s > t \/ s == t 
+ *  and 
  *  s != t ==> s > t \/ t > s
  */
 // TODO write tests
@@ -38,9 +38,9 @@ class InequalityPredicateNormalization
 public:
   USE_ALLOCATOR(InequalityPredicateNormalization);
 
-  Clause* simplify(Clause* premise) override
+  Clause* simplify(Clause* premise) override 
   {
-    RStack<Literal*> res;
+    RStack<Literal*> res; 
     bool changed = false;
     // What each literal rewritten became, for replay: two literals, in order.
     Stack<Literal*> built;
@@ -69,7 +69,7 @@ public:
         res->push(l);
       }
     }
-
+    
     if (changed) {
       auto out = Clause::fromStack(*res, SimplifyingInference1(Kernel::InferenceRule::ALASCA_NORMALIZATION, premise));
       // Said, so that replay does not read this as the literal-wise
@@ -88,7 +88,7 @@ public:
 
 
 #undef DEBUG
-} // namespaceALASCA
+} // namespaceALASCA 
 } // namespace Inferences
 
 #endif /*__ALASCA_Inferences_InequalityPredicateNormalization__*/

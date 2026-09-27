@@ -168,11 +168,7 @@ Option<Clause*> TermFactoring::applyRule(
   // and the unifier, which is discarded with the clause built; and the pairs
   // it could not unify, which are literals of the conclusion.
   {
-    Substitution s;
-    DHSet<unsigned, FnvHash, IdentityHash> vars;
-    sel1.clause()->collectVars(vars);
-    for (unsigned v : iterTraits(vars.iterator()))
-      s.bindUnbound(v, uwa->subs().apply(TermList(v, false), 0));
+    Substitution s = InferenceStore::bankSubstitution(sel1.clause(), uwa->subs(), 0);
     InferenceStore::instance()->recordPremiseUse(clause, sel1.clause(), sel1.literal(), s1, 0, s);
     InferenceStore::instance()->recordOther(clause, sel1.clause(), s2);
     // What the premise's first argument became: the sum, or zero where the

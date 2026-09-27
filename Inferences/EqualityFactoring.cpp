@@ -168,11 +168,7 @@ struct EqualityFactoring::ResultFn
     // then the other equality with its own. Neither survives the inference,
     // and which literals they were is what replaying the step turns on.
     {
-      Substitution s;
-      DHSet<unsigned, FnvHash, IdentityHash> vars;
-      _cl->collectVars(vars);
-      for (unsigned v : iterTraits(vars.iterator()))
-        s.bindUnbound(v, absUnif.subs().apply(TermList(v, false), 0));
+      Substitution s = InferenceStore::bankSubstitution(_cl, absUnif.subs(), 0);
       InferenceStore::instance()->recordPremiseUse(cl, _cl, sLit, sLHS, 0, s);
       InferenceStore::instance()->recordPremiseUse(cl, _cl, fLit, fLHS, 0, s);
     }

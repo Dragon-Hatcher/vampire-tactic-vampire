@@ -223,11 +223,7 @@ public:
     // is built of -- `j s + u` and `i` of the first, the floor rewritten of
     // the second.
     auto record = [&](Clause* premise, unsigned bank, Literal* on, TermList term) {
-      Substitution s;
-      DHSet<unsigned, FnvHash, IdentityHash> vars;
-      premise->collectVars(vars);
-      for (unsigned v : iterTraits(vars.iterator()))
-        s.bindUnbound(v, uwa.subs().apply(TermList(v, false), bank));
+      Substitution s = InferenceStore::bankSubstitution(premise, uwa.subs(), bank);
       InferenceStore::instance()->recordPremiseUse(out, premise, on, term, 0, s);
     };
     record(lhs.clause(), lhsVarBank, lhs.self.literal(), js_u);
