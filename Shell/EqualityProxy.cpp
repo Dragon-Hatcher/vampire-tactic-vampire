@@ -318,6 +318,13 @@ Clause* EqualityProxy::apply(Clause* cl)
     res = Clause::fromStack(*resLits,
         NonspecificInferenceMany(InferenceRule::EQUALITY_PROXY_REPLACEMENT, prems));
   }
+  // What each equation replaced became, for replay.
+  InferenceStore::instance()->recordPremiseUse(res, cl, TermList::empty(), 0,
+    Stack<std::pair<unsigned, TermList>>());
+  for (unsigned i = 0; i < cl->length(); i++)
+    if ((*resLits)[i] != (*cl)[i])
+      InferenceStore::instance()->recordRewritten(res, cl, (*cl)[i], (*resLits)[i],
+        TermList::empty());
   // TODO isn't this done automatically
   res->setAge(cl->age()); // MS: this seems useless; as long as EqualityProxy is only operating as a part of preprocessing, age is going to 0 anyway
 

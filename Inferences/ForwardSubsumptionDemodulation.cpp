@@ -613,6 +613,10 @@ isRedundant:
                 }
                 InferenceStore::instance()->recordPremiseUse(replacement, cl,
                   dlit, TermList(lhsS), 0, Substitution());
+                InferenceStore::instance()->recordRewritten(replacement, cl, dlit, newLit,
+                  dlit->isEquality()
+                    ? EqHelper::replace(dlit->termArg(0), TermList(lhsS), rhsS)
+                    : TermList::empty());
                 InferenceStore::instance()->recordPremiseUse(replacement, mcl,
                   eqLit, lhs, 0, theta);
               }

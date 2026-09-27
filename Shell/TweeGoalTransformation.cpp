@@ -67,6 +67,14 @@ class Definizator : public BottomUpTermTransformer {
     DHMap<Term*,std::pair<unsigned,Clause*>, FnvHash, PtrIdentityHash> _cache;
 
     Definizator(bool groundOnly) : newUnits(UnitList::empty()), _groundOnly(groundOnly) {}
+    /**
+     * What folding makes of a term, as `transformLiteral` makes of a literal's
+     * arguments: those are proper subterms of the literal, rewritten themselves
+     * once theirs are, where `transform` of a term rewrites only its proper
+     * subterms.
+     */
+    TermList transformTerm(TermList t)
+    { return transformSubterm(t.isTerm() ? TermList(transform(t.term())) : t); }
   private:
     bool _groundOnly;
 
@@ -235,17 +243,35 @@ void Shell::TweeGoalTransformation::apply(Problem &prb, bool groundOnly)
     df.premises = UnitList::empty(); // will get filled as we traverse and rewrite
 
     newLits.reset();
+    // What each literal folded became, for replay, with its first argument
+    // folded: sharing can put an equation's sides the other way round.
+    Stack<std::tuple<Literal*, Literal*, TermList>> folded;
     for (unsigned i = 0; i < c->size(); i++) {
       Literal* l = c->literals()[i];
       // cout << "L: " << l->toString() << endl;
       Literal* nl = df.transformLiteral(l);
       // cout << "NL: " << nl->toString() << endl;
       newLits.push(nl);
+      if (nl != l) {
+        TermList lhs = TermList::empty();
+        if (l->isEquality()) {
+          // The definitions are cached, so this makes none, but it does name
+          // their premises again.
+          UnitList* premises = df.premises;
+          lhs = df.transformTerm(*l->nthArgument(0));
+          df.premises = premises;
+        }
+        folded.push({l, nl, lhs});
+      }
     }
     if (df.premises) {
       UnitList::push(c,df.premises);
       Clause* nc = Clause::fromStack(newLits,
         FormulaClauseTransformationMany(InferenceRule::DEFINITION_FOLDING,df.premises));
+      InferenceStore::instance()->recordPremiseUse(nc, c, TermList::empty(), 0,
+        Stack<std::pair<unsigned, TermList>>());
+      for (auto [from, to, lhs] : folded)
+        InferenceStore::instance()->recordRewritten(nc, c, from, to, lhs);
       u = nc; // replace the original in the Problem's list
     }
   }

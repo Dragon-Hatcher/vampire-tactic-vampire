@@ -101,11 +101,15 @@ Clause* InequalitySplitting::trySplitClause(Clause* cl)
   for(unsigned i=0; i<firstSplittable; i++) {
     resLits->push((*cl)[i]);
   }
+  // What each literal split became, for replay.
+  Stack<std::pair<Literal*, Literal*>> split;
   for(unsigned i=firstSplittable; i<clen; i++) {
     Literal* lit= (*cl)[i];
     if(i==firstSplittable || isSplittable(lit)) {
       Clause* prem;
-      resLits->push(splitLiteral(lit, inpType , prem));
+      Literal* named = splitLiteral(lit, inpType , prem);
+      resLits->push(named);
+      split.push({lit, named});
       UnitList::push(prem, premises);
     } else {
       resLits->push(lit);
@@ -115,6 +119,10 @@ Clause* InequalitySplitting::trySplitClause(Clause* cl)
   UnitList::push(cl, premises);
 
   auto res = Clause::fromStack(*resLits,NonspecificInferenceMany(InferenceRule::INEQUALITY_SPLITTING, premises));
+  InferenceStore::instance()->recordPremiseUse(res, cl, TermList::empty(), 0,
+    Stack<std::pair<unsigned, TermList>>());
+  for (auto [from, to] : split)
+    InferenceStore::instance()->recordRewritten(res, cl, from, to, TermList::empty());
   // TODO isn't this done automatically?
   res->setAge(cl->age()); // MS: this seems useless; as long as InequalitySplitting is only operating as a part of preprocessing, age is going to 0 anyway
 
