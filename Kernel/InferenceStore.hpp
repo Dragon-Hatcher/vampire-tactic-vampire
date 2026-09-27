@@ -408,7 +408,27 @@ public:
     Stack<std::pair<Formula*, bool>> replacement;
     /** What each variable the clause quantifies has been bound to. */
     Stack<std::pair<unsigned, TermList>> bindings;
+    /** How the state was reached: one of the `gen*` constants below. */
+    unsigned how;
+    /**
+     * Where each literal the step pushed went, in the order it pushed them,
+     * with `genTurned` set where the push stored `~f` at a sign as `f` at the
+     * other. A clause started from pushes `replacement`; one extended pushes
+     * the parent's literals with `replacement` in place of `position`; one
+     * replaced in place has one entry, for `position`.
+     */
+    Stack<unsigned> placement;
   };
+
+  /** A clause clausification started from: a formula, or a definition. */
+  static const unsigned genIntroduced = 0;
+  /** A position replaced by what `replacement` lists, the rest kept. */
+  static const unsigned genExtended = 1;
+  /** A position rewritten in place: a quantifier's body, a let's contents. */
+  static const unsigned genReplaced = 2;
+  /** A position rewritten in place by a name for what stood there. */
+  static const unsigned genNamed = 3;
+  static const unsigned genTurned = 0x80000000u;
 
   static const unsigned stateNone = UINT_MAX;
   static const unsigned positionNone = UINT_MAX;

@@ -224,7 +224,11 @@ private:
    */
   DHMap<Literal*, SIGN, FnvHash, PtrIdentityHash> _literalsCache;
   DHMap<Formula*, SIGN, FnvHash, PtrIdentityHash> _formulasCache;
+  /** Where each literal pushed since the last record went (cf. GenClauseState). */
+  Stack<unsigned> _placed;
+
   inline void pushLiteral(SPGenClause gc, GenLit gl) {
+    unsigned turned = 0;
     if (formula(gl)->connective() == LITERAL) {
       /**
        * A generalised literal that is atomic have two signs, the one assigned
@@ -238,10 +242,26 @@ private:
       if (l->shared() && ((SIGN)l->polarity() != POSITIVE)) {
         Literal* cl = Literal::complementaryLiteral(l);
         gl = GenLit(new AtomicFormula(cl), OPPOSITE(sign(gl)));
+        turned = Kernel::InferenceStore::genTurned;
       }
     } else if (formula(gl)->connective() == NOT) {
       gl = GenLit(formula(gl)->uarg(), OPPOSITE(sign(gl)));
+      turned = Kernel::InferenceStore::genTurned;
     }
+    // A duplicate goes where the literal it repeats went.
+    auto repeated = [&](bool literal) -> unsigned {
+      for (unsigned i = 0; i < gc->_size; i++) {
+        GenLit other = gc->_literals[i];
+        if (sign(other) != sign(gl)) continue;
+        if (literal ? (formula(other)->connective() == LITERAL
+              && formula(other)->literal() == formula(gl)->literal())
+            : formula(other) == formula(gl)) {
+          return i;
+        }
+      }
+      ASSERTION_VIOLATION;
+      return 0;
+    };
 
     Formula* f = formula(gl);
 
@@ -252,6 +272,7 @@ private:
           gc->valid = false;
         } else {
           LOG2("Found duplicate literal", l->toString());
+          _placed.push(repeated(true) | turned);
           return;
         }
       }
@@ -260,9 +281,12 @@ private:
         gc->valid = false;
       } else {
         LOG2("Found duplicate formula", f->toString());
+        _placed.push(repeated(false) | turned);
         return;
       }
     }
+
+    _placed.push(gc->_size | turned);
 
     gc->_literals[gc->_size++] = gl;
   }
@@ -357,7 +381,7 @@ private:
       return occ;
     }
 
-    void replaceBy(Formula* f, NewCNF* cnf) {
+    void replaceBy(Formula* f, NewCNF* cnf, bool named = false) {
       Occurrences::Iterator occit(*this);
 
       bool negateOccurrenceSign = false;
@@ -388,7 +412,7 @@ private:
         if (negateOccurrenceSign) {
           sign(gl) = OPPOSITE(sign(gl));
         }
-        cnf->recordReplacement(occ.gc, occ.position);
+        cnf->recordReplacement(occ.gc, occ.position, negateOccurrenceSign, named);
       }
     }
 
@@ -419,6 +443,7 @@ private:
 
   SPGenClause makeGenClause(List<GenLit>* gls, BindingList* bindings, BindingList* foolBindings) {
     SPGenClause gc = SPGenClause(new GenClause(List<GenLit>::length(gls), bindings, foolBindings));
+    _placed.reset();
 
     ASS(_literalsCache.isEmpty());
     ASS(_formulasCache.isEmpty());
@@ -463,10 +488,15 @@ private:
    * in the position that was replaced.
    */
   void recordGenClause(SPGenClause gc, unsigned parent, unsigned position,
-      List<GenLit>* replacement) {
+      List<GenLit>* replacement, unsigned how) {
     Kernel::InferenceStore::GenClauseState state;
     state.parent = parent;
     state.position = position;
+    state.how = how;
+    for (unsigned i = 0; i < _placed.size(); i++) {
+      state.placement.push(_placed[i]);
+    }
+    _placed.reset();
     GenClause::Iterator it = gc->genLiterals();
     while (it.hasNext()) {
       GenLit gl = it.next();
@@ -485,9 +515,12 @@ private:
     gc->state = Kernel::InferenceStore::instance()->newGenClauseState(std::move(state));
   }
 
-  void recordReplacement(SPGenClause gc, unsigned position) {
+  void recordReplacement(SPGenClause gc, unsigned position, bool turned, bool named) {
     List<GenLit>* replacement = new List<GenLit>(gc->_literals[position]);
-    recordGenClause(gc, gc->state, position, replacement);
+    _placed.reset();
+    _placed.push(position | (turned ? Kernel::InferenceStore::genTurned : 0));
+    recordGenClause(gc, gc->state, position, replacement,
+      named ? Kernel::InferenceStore::genNamed : Kernel::InferenceStore::genReplaced);
     List<GenLit>::destroy(replacement);
   }
 
@@ -495,7 +528,7 @@ private:
     unsigned expectedSize = List<GenLit>::length(gls);
     SPGenClause gc = makeGenClause(gls, bindings, foolBindings);
     recordGenClause(gc, Kernel::InferenceStore::stateNone,
-      Kernel::InferenceStore::positionNone, List<GenLit>::empty());
+      Kernel::InferenceStore::positionNone, gls, Kernel::InferenceStore::genIntroduced);
     registerGenClause(gc, expectedSize);
   }
 
@@ -516,6 +549,7 @@ private:
 
     ASS(_literalsCache.isEmpty());
     ASS(_formulasCache.isEmpty());
+    _placed.reset();
 
     GenClause::Iterator gcit = gc->genLiterals();
     unsigned i = 0;
@@ -535,7 +569,7 @@ private:
     _literalsCache.reset();
     _formulasCache.reset();
 
-    recordGenClause(newGc, gc->state, position, gls);
+    recordGenClause(newGc, gc->state, position, gls, Kernel::InferenceStore::genExtended);
     registerGenClause(newGc, size);
   }
 

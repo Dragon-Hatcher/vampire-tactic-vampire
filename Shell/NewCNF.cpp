@@ -1292,7 +1292,7 @@ void NewCNF::nameSubformula(Formula* g, Occurrences &occurrences)
       env.signature->getPredicate(naming->functor()), arguments, g);
   }
 
-  occurrences.replaceBy(name, this);
+  occurrences.replaceBy(name, this, /*named=*/true);
 
   enqueue(g);
 
