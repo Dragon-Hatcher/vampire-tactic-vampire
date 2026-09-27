@@ -55,7 +55,7 @@ struct FloorFourierMotzkinConf
     auto s0 = uwa.subs().apply(prem0.selectedAtom(), varBank0);
     auto s1 = uwa.subs().apply(prem1.selectedAtom(), varBank1);
     if (NumTraits::isFloor(s0) || NumTraits::isFloor(s1)) {
-      return IntegerFourierMotzkinConf<NumTraits>::applyRule__(
+      auto out = IntegerFourierMotzkinConf<NumTraits>::applyRule__(
           prem0, varBank0,
           prem1, varBank1,
           NumTraits::constant(1),
@@ -69,6 +69,9 @@ struct FloorFourierMotzkinConf
                 Inference(GeneratingInference2(Kernel::InferenceRule::ALASCA_INTEGER_FOURIER_MOTZKIN, prem0.clause(), prem1.clause()))
              );
           });
+      if (out.isSome())
+        IntegerFourierMotzkinConf<NumTraits>::recordUses(*out, prem0, varBank0, prem1, varBank1, nullptr, 0, uwa);
+      return out;
     } else {
       return {};
     }

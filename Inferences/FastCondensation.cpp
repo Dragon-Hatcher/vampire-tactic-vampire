@@ -21,6 +21,10 @@
 #include "Kernel/Term.hpp"
 #include "Kernel/TermIterators.hpp"
 
+#include "Kernel/InferenceStore.hpp"
+#include "Kernel/Substitution.hpp"
+#include "Lib/DHSet.hpp"
+
 #include "FastCondensation.hpp"
 
 #undef LOGGING
@@ -45,6 +49,11 @@ struct CondensationBinder
   void reset()
   {
     bindings.reset();
+  }
+  /** What `var` was bound to, if it was. */
+  bool binding(unsigned var, TermList& term)
+  {
+    return bindings.find(var, term);
   }
   bool bind(unsigned var, TermList term)
   {
@@ -127,7 +136,29 @@ Clause* FastCondensation<higherOrder>::simplify(Clause* cl)
           }
         }
  
-        return Clause::fromStack(*resLits, SimplifyingInference1(InferenceRule::CONDENSATION, cl));
+        Clause* res = Clause::fromStack(*resLits, SimplifyingInference1(InferenceRule::CONDENSATION, cl));
+        // The conclusion is the premise at the matcher of one of its literals
+        // onto another, which moves only the variables that literal alone has,
+        // less the literal that then duplicates the other: which instance it
+        // is is the whole of what the step did, as for `Condensation`.
+        // Only the dropped literal's variables are read off the binder, which
+        // is not reset between attempts and can hold what a failed one bound.
+        {
+          Substitution s;
+          DHSet<unsigned, FnvHash, IdentityHash> vars;
+          cl->collectVars(vars);
+          DHSet<unsigned, FnvHash, IdentityHash> moved;
+          for (unsigned v : iterTraits(VariableIterator(cLit)).map([](TermList t) { return t.var(); }))
+            moved.insert(v);
+          for (unsigned v : iterTraits(vars.iterator())) {
+            TermList bound;
+            s.bindUnbound(v, moved.contains(v) && cbinder.binding(v, bound)
+                ? bound : TermList(v, false));
+          }
+          InferenceStore::instance()->recordPremiseUse(res, cl, nullptr,
+            TermList::empty(), 0, s);
+        }
+        return res;
       }
     }
   }

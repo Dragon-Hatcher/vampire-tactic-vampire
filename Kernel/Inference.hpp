@@ -18,6 +18,7 @@
 #define __Inference__
 
 #include <iosfwd>
+#include <source_location>
 #include <limits>
 #include <string>
 #include <type_traits>
@@ -611,96 +612,126 @@ std::string ruleName(InferenceRule rule);
 */
 
 struct FromInput {
-  FromInput(UnitInputType it) : inputType(it) {}
+  FromInput(UnitInputType it, std::source_location site = std::source_location::current()) : inputType(it), site(site) {}
   UnitInputType inputType;
+  /** Where in vampire the inference was made. */
+  std::source_location site;
 };
 
 struct TheoryAxiom {
-  TheoryAxiom(InferenceRule r) : rule(r) {}
+  TheoryAxiom(InferenceRule r, std::source_location site = std::source_location::current()) : rule(r), site(site) {}
   InferenceRule rule;
+  /** Where in vampire the inference was made. */
+  std::source_location site;
 };
 
 struct FormulaClauseTransformation {
-  FormulaClauseTransformation(InferenceRule r, Unit* p) : rule(r), premise(p) {}
+  FormulaClauseTransformation(InferenceRule r, Unit* p, std::source_location site = std::source_location::current()) : rule(r), premise(p), site(site) {}
   InferenceRule rule;
   Unit* premise;
+  /** Where in vampire the inference was made. */
+  std::source_location site;
 };
 
 struct FormulaClauseTransformationMany {
-  FormulaClauseTransformationMany(InferenceRule r, UnitList* p) : rule(r), premises(p) {}
+  FormulaClauseTransformationMany(InferenceRule r, UnitList* p, std::source_location site = std::source_location::current()) : rule(r), premises(p), site(site) {}
   InferenceRule rule;
   UnitList* premises;
+  /** Where in vampire the inference was made. */
+  std::source_location site;
 };
 
 struct SimplifyingInference1 {
-  SimplifyingInference1(InferenceRule r, Clause* main_premise) : rule(r), premise(main_premise) {}
+  SimplifyingInference1(InferenceRule r, Clause* main_premise, std::source_location site = std::source_location::current()) : rule(r), premise(main_premise), site(site) {}
   InferenceRule rule;
   Clause* premise;
+  /** Where in vampire the inference was made. */
+  std::source_location site;
 };
 
 struct SimplifyingInference2 {
-  SimplifyingInference2(InferenceRule r, Clause* main_premise, Clause* other_premise) :
-    rule(r), premise1(main_premise), premise2(other_premise) {}
+  SimplifyingInference2(InferenceRule r, Clause* main_premise, Clause* other_premise, std::source_location site = std::source_location::current()) :
+    rule(r), premise1(main_premise), premise2(other_premise), site(site) {}
   InferenceRule rule;
   Clause* premise1;
   Clause* premise2;
+  /** Where in vampire the inference was made. */
+  std::source_location site;
 };
 
 struct SimplifyingInferenceMany {
-  SimplifyingInferenceMany(InferenceRule r, UnitList* prems) : rule(r), premises(prems) {}
+  SimplifyingInferenceMany(InferenceRule r, UnitList* prems, std::source_location site = std::source_location::current()) : rule(r), premises(prems), site(site) {}
   InferenceRule rule;
   UnitList* premises;
+  /** Where in vampire the inference was made. */
+  std::source_location site;
 };
 
 struct GeneratingInference1 {
-  GeneratingInference1(InferenceRule r, Clause* p) : rule(r), premise(p) {}
+  GeneratingInference1(InferenceRule r, Clause* p, std::source_location site = std::source_location::current()) : rule(r), premise(p), site(site) {}
   InferenceRule rule;
   Clause* premise;
+  /** Where in vampire the inference was made. */
+  std::source_location site;
 };
 
 struct GeneratingInference2 {
-  GeneratingInference2(InferenceRule r, Clause* p1, Clause* p2) : rule(r), premise1(p1), premise2(p2) {}
+  GeneratingInference2(InferenceRule r, Clause* p1, Clause* p2, std::source_location site = std::source_location::current()) : rule(r), premise1(p1), premise2(p2), site(site) {}
   InferenceRule rule;
   Clause* premise1;
   Clause* premise2;
+  /** Where in vampire the inference was made. */
+  std::source_location site;
 };
 
 struct GeneratingInferenceMany {
-  GeneratingInferenceMany(InferenceRule r, UnitList* prems) : rule(r), premises(prems) {}
+  GeneratingInferenceMany(InferenceRule r, UnitList* prems, std::source_location site = std::source_location::current()) : rule(r), premises(prems), site(site) {}
   InferenceRule rule;
   UnitList* premises;
+  /** Where in vampire the inference was made. */
+  std::source_location site;
 };
 
 struct NonspecificInference0 {
-  NonspecificInference0(UnitInputType it, InferenceRule r) : inputType(it), rule(r) {}
+  NonspecificInference0(UnitInputType it, InferenceRule r, std::source_location site = std::source_location::current()) : inputType(it), rule(r), site(site) {}
   UnitInputType inputType;
   InferenceRule rule;
+  /** Where in vampire the inference was made. */
+  std::source_location site;
 };
 
 struct NonspecificInference1 {
-  NonspecificInference1(InferenceRule r, Unit* p) : rule(r), premise(p) {}
+  NonspecificInference1(InferenceRule r, Unit* p, std::source_location site = std::source_location::current()) : rule(r), premise(p), site(site) {}
   InferenceRule rule;
   Unit* premise;
+  /** Where in vampire the inference was made. */
+  std::source_location site;
 };
 
 struct NonspecificInference2 {
-  NonspecificInference2(InferenceRule r, Unit* p1, Unit* p2) : rule(r), premise1(p1), premise2(p2) {}
+  NonspecificInference2(InferenceRule r, Unit* p1, Unit* p2, std::source_location site = std::source_location::current()) : rule(r), premise1(p1), premise2(p2), site(site) {}
   InferenceRule rule;
   Unit* premise1;
   Unit* premise2;
+  /** Where in vampire the inference was made. */
+  std::source_location site;
 };
 
 struct NonspecificInferenceMany {
-  NonspecificInferenceMany(InferenceRule r, UnitList* prems) : rule(r), premises(prems) {}
+  NonspecificInferenceMany(InferenceRule r, UnitList* prems, std::source_location site = std::source_location::current()) : rule(r), premises(prems), site(site) {}
   InferenceRule rule;
   UnitList* premises;
+  /** Where in vampire the inference was made. */
+  std::source_location site;
 };
 
 struct InferenceOfASatClause {
-  InferenceOfASatClause(InferenceRule r, SAT::SATClause* cl, UnitList* prems) : rule(r), clause(cl), premises(prems) {}
+  InferenceOfASatClause(InferenceRule r, SAT::SATClause* cl, UnitList* prems, std::source_location site = std::source_location::current()) : rule(r), clause(cl), premises(prems), site(site) {}
   InferenceRule rule;
   SAT::SATClause* clause;
   UnitList* premises;
+  /** Where in vampire the inference was made. */
+  std::source_location site;
 };
 
 /**
@@ -711,11 +742,14 @@ struct InferenceOfASatClause {
  * to know who the causal parent was when computing certain heuristics.
 */
 struct ComponentClauseInference {
-  ComponentClauseInference(InferenceRule r, UnitList* prems, Clause* causalParent)
-    : rule(r), premises(prems), causalParent(causalParent) {}
+  ComponentClauseInference(InferenceRule r, UnitList* prems, Clause* causalParent,
+      std::source_location site = std::source_location::current())
+    : rule(r), premises(prems), causalParent(causalParent), site(site) {}
   InferenceRule rule;
   UnitList* premises;
   Clause* causalParent;
+  /** Where in vampire the inference was made. */
+  std::source_location site;
 };
 
 struct NeedsMinimization; // defined in SATInference.hpp
@@ -879,6 +913,10 @@ public:
 
   /** Return the inference rule */
   InferenceRule rule() const { return _rule; }
+  /** The source file of where in vampire the inference was made, or null. */
+  const char* siteFile() const { return _siteFile; }
+  /** The line of where in vampire the inference was made, 0 if unknown. */
+  unsigned siteLine() const { return _siteLine; }
 
   unsigned char getSineLevel() const { return _sineLevel; }
   /* should be only used to initialize the "whole chain" by SineUtils */
@@ -974,6 +1012,9 @@ private:
 
   /** The rule used */
   InferenceRule _rule : 8;
+  /** Where in vampire the inference was made (`siteFile`, `siteLine`). */
+  const char* _siteFile = nullptr;
+  unsigned _siteLine = 0;
   /** Sine level computed in SineUtils and used in various heuristics.
    * May stay uninitialized (i.e. always MAX), if not needed
    **/

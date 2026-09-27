@@ -16,6 +16,9 @@
 #ifndef __ALASCA_Inferences_Coherence__
 #define __ALASCA_Inferences_Coherence__
 
+#include "Kernel/InferenceStore.hpp"
+#include "Kernel/Substitution.hpp"
+#include "Lib/DHSet.hpp"
 #include "Debug/Assertion.hpp"
 #include "Forwards.hpp"
 
@@ -197,8 +200,8 @@ public:
     auto js_u = add(mul(j, lhs.s()), lhs.u());
     auto js_uσ = sigmaL(js_u);
 
-    return someIf(i != 0, [&]() {
-        return Clause::fromIterator(
+    if (i == 0) return Option<Clause*>().intoIter();
+    auto out = Clause::fromIterator(
           concatIters(
             lhs.contextLiterals().map([=](auto l) { return sigmaL(l); }),
             rhs.contextLiterals().map([=](auto l) { return sigmaR(l); }),
@@ -210,7 +213,22 @@ public:
           ), 
           Inference(GeneratingInference2(Kernel::InferenceRule::ALASCA_COHERENCE, lhs.clause(), rhs.clause()))
           );
-        }).intoIter();
+    // For replay: each premise's substitution, and the terms the conclusion
+    // is built of -- `j s + u` and `i` of the first, the floor rewritten of
+    // the second.
+    auto record = [&](Clause* premise, unsigned bank, Literal* on, TermList term) {
+      Substitution s;
+      DHSet<unsigned, FnvHash, IdentityHash> vars;
+      premise->collectVars(vars);
+      for (unsigned v : iterTraits(vars.iterator()))
+        s.bindUnbound(v, uwa.subs().apply(TermList(v, false), bank));
+      InferenceStore::instance()->recordPremiseUse(out, premise, on, term, 0, s);
+    };
+    record(lhs.clause(), lhsVarBank, lhs.self.literal(), js_u);
+    InferenceStore::instance()->recordOther(out, lhs.clause(),
+        NumTraits::constantTl(typename NumTraits::ConstantType(i)));
+    record(rhs.clause(), rhsVarBank, rhs.self.literal(), rhs.toRewrite);
+    return some(out).intoIter();
   }
 };
 

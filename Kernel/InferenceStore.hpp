@@ -291,6 +291,12 @@ public:
      * recorded as the term the step acted on; the others as they are.
      */
     VIRAS = 8,
+    /**
+     * ALASCA's strong normalization of comparisons (`s >= t` is `s > t | s = t`,
+     * `s != t` is `s > t | t > s`): a literal can become two, so no image is
+     * recorded, and each literal of the conclusion follows by the arithmetic.
+     */
+    INEQUALITY_PREDICATE_NORMALIZATION = 9,
   };
 
   /** How a literal-wise simplification rewrote its premise. */

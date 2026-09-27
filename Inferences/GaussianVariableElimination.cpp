@@ -12,6 +12,9 @@
 #include "Kernel/Rebalancing/Inverters.hpp"
 #include "Kernel/Clause.hpp"
 #include "Kernel/EqHelper.hpp"
+#include "Kernel/InferenceStore.hpp"
+#include "Kernel/Substitution.hpp"
+#include "Lib/DHSet.hpp"
 
 #define DEBUG(...)  //DBG(__VA_ARGS__)
 
@@ -74,7 +77,19 @@ SimplifyingGeneratingInference1::Result GaussianVariableElimination::rewrite(Cla
     }
   }
 
-  return SimplifyingGeneratingInference1::Result{Clause::fromStack(*resLits, inf), premiseRedundant};
+  Clause* res = Clause::fromStack(*resLits, inf);
+  // The conclusion is the premise at `find := replace`, less the literal that
+  // solved for it: which instance it is is the whole of what the step did.
+  {
+    Substitution s;
+    DHSet<unsigned, FnvHash, IdentityHash> vars;
+    cl.collectVars(vars);
+    for (unsigned v : iterTraits(vars.iterator()))
+      s.bindUnbound(v, v == find.var() ? replace : TermList(v, false));
+    InferenceStore::instance()->recordPremiseUse(res, &cl, nullptr,
+      TermList::empty(), 0, s);
+  }
+  return SimplifyingGeneratingInference1::Result{res, premiseRedundant};
 }
 
 } // namespace Inferences 

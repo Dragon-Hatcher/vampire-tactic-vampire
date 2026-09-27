@@ -16,6 +16,8 @@
 #ifndef __ALASCA_Inferences_IntegerFourierMotzkin__
 #define __ALASCA_Inferences_IntegerFourierMotzkin__
 
+#include "Kernel/InferenceStore.hpp"
+#include "Kernel/Substitution.hpp"
 #include "FourierMotzkin.hpp"
 #include "Coherence.hpp"
 
@@ -44,6 +46,38 @@ struct IntegerFourierMotzkinConf
                       prem1, varBank1,
                       prem2, varBank2, uwa).intoIter(); }
 
+  /**
+   * What the inference did to each premise, for replay: the unifier's
+   * substitution, and the terms the conclusion is built of -- `k0 s` and `t0`
+   * of the first premise, `-k1 s` and `t1` of the second, `u` and `j` of the third
+   * (none for floor Fourier-Motzkin, whose `j` is 1 and `u` 0).
+   */
+  static void recordUses(Clause* cl,
+      Premise0 const& prem0, unsigned varBank0,
+      Premise1 const& prem1, unsigned varBank1,
+      Premise2 const* prem2, unsigned varBank2,
+      AbstractingUnifier& uwa)
+  {
+    auto record = [&](Clause* premise, unsigned bank, Literal* on, TermList term, TermList other) {
+      Substitution s;
+      DHSet<unsigned, FnvHash, IdentityHash> vars;
+      premise->collectVars(vars);
+      for (unsigned v : iterTraits(vars.iterator()))
+        s.bindUnbound(v, uwa.subs().apply(TermList(v, false), bank));
+      InferenceStore::instance()->recordPremiseUse(cl, premise, on, term, 0, s);
+      InferenceStore::instance()->recordOther(cl, premise, other);
+    };
+    // `k s` rather than `s`: the premise is `k s + r > 0`, and its other
+    // term `t = r / |k|`, so replay needs `k` to relate the two.
+    auto monomial = [](auto const& prem) {
+      return NumTraits::mul(NumTraits::constantTl(prem.template numeral<NumTraits>()), prem.selectedAtom());
+    };
+    record(prem0.clause(), varBank0, prem0.literal(), monomial(prem0), prem0.notSelectedTerm());
+    record(prem1.clause(), varBank1, prem1.literal(), monomial(prem1), prem1.notSelectedTerm());
+    if (prem2)
+      record(prem2->clause(), varBank2, prem2->self.literal(), prem2->u(), NumTraits::constantTl(prem2->j()));
+  }
+
   // prem0:  s + t0 > 0
   // prem1: -s + t1 > 0
   // prem2: isInt(j s + u)
@@ -57,7 +91,7 @@ struct IntegerFourierMotzkinConf
   {
     if (!prem0.numTraitsIs<NumTraits>()) return {};
     auto sigma2 = [&](auto t)  { return uwa.subs().apply(t, varBank2); };
-    return applyRule__(prem0, varBank0,
+    auto out = applyRule__(prem0, varBank0,
                        prem1, varBank1,
                        prem2.j(),
                        sigma2(prem2.u()),
@@ -70,6 +104,9 @@ struct IntegerFourierMotzkinConf
                             Inference(GeneratingInferenceMany(Kernel::InferenceRule::ALASCA_INTEGER_FOURIER_MOTZKIN, UnitList::fromIterator(iterItems(prem0.clause(), prem1.clause(), prem2.clause()))))
                          );
                        });
+    if (out.isSome())
+      recordUses(*out, prem0, varBank0, prem1, varBank1, &prem2, varBank2, uwa);
+    return out;
   }
 
   // prem0: C0 \/ s + t0 > 0

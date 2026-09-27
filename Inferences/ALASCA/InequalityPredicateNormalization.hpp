@@ -11,6 +11,7 @@
 #ifndef __ALASCA_Inferences_InequalityPredicateNormalization__
 #define __ALASCA_Inferences_InequalityPredicateNormalization__
 
+#include "Kernel/InferenceStore.hpp"
 #include "Forwards.hpp"
 
 #include "Inferences/InferenceEngine.hpp"
@@ -63,7 +64,13 @@ public:
     }
     
     if (changed) {
-      return Clause::fromStack(*res, SimplifyingInference1(Kernel::InferenceRule::ALASCA_NORMALIZATION, premise));
+      auto out = Clause::fromStack(*res, SimplifyingInference1(Kernel::InferenceRule::ALASCA_NORMALIZATION, premise));
+      // Said, so that replay does not read this as the literal-wise
+      // normalization of the same rule, which records an image per literal.
+      InferenceStore::instance()->recordLiteralImages(out,
+          InferenceStore::LiteralProcedure::INEQUALITY_PREDICATE_NORMALIZATION,
+          Stack<InferenceStore::LiteralImage>());
+      return out;
     } else {
       return premise;
     }

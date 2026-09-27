@@ -43,16 +43,20 @@ struct NeedsMinimization {
    * (no memory responsibility overtaken; the list must survive till the minimization call),
    * a stack of @b usedAssumptions is copied.
    */
-  NeedsMinimization(InferenceRule rule, UnitList* premises, SATClauseList* satPremises, const SATLiteralStack& usedAssumptions) :
-    _rule(rule), _premises(premises), _satPremises(satPremises), _usedAssumptions(usedAssumptions) {}
+  NeedsMinimization(InferenceRule rule, UnitList* premises, SATClauseList* satPremises, const SATLiteralStack& usedAssumptions,
+      std::source_location site = std::source_location::current()) :
+    _rule(rule), _premises(premises), _satPremises(satPremises), _usedAssumptions(usedAssumptions), site(site) {}
 
   /**
    * Constructor versions with no assumptions.
    */
-  NeedsMinimization(InferenceRule rule, UnitList* premises, SATClauseList* satPremises) :
-      _rule(rule), _premises(premises), _satPremises(satPremises) {}
+  NeedsMinimization(InferenceRule rule, UnitList* premises, SATClauseList* satPremises,
+      std::source_location site = std::source_location::current()) :
+      _rule(rule), _premises(premises), _satPremises(satPremises), site(site) {}
 
   InferenceRule _rule;
+  /** Where in vampire the inference was made. */
+  std::source_location site;
   // the first-order premises to be minimised
   UnitList* _premises;
   // the SAT premises that will be used to minimise them
