@@ -220,32 +220,27 @@ void InferenceStore::recordRewritten(Unit* generated, Unit* premise, Literal* fr
   ASSERTION_VIOLATION;
 }
 
-void InferenceStore::recordFactor(Unit* generated, Unit* premise, TermList factor)
+InferenceStore::PremiseUse& InferenceStore::lastUse(Unit* generated, Unit* premise)
 {
   Stack<PremiseUse>* uses = _premiseUses.findPtr(generated->number());
   ASS(uses);
   for (unsigned i = uses->size(); i-- > 0;) {
     PremiseUse& use = (*uses)[i];
-    if (use.premise != premise->number())
-      continue;
-    use.factor = factor;
-    return;
+    if (use.premise == premise->number())
+      return use;
   }
   ASSERTION_VIOLATION;
+  return (*uses)[0];
+}
+
+void InferenceStore::recordFactor(Unit* generated, Unit* premise, TermList factor)
+{
+  lastUse(generated, premise).factor = factor;
 }
 
 void InferenceStore::recordOther(Unit* generated, Unit* premise, TermList other)
 {
-  Stack<PremiseUse>* uses = _premiseUses.findPtr(generated->number());
-  ASS(uses);
-  for (unsigned i = uses->size(); i-- > 0;) {
-    PremiseUse& use = (*uses)[i];
-    if (use.premise != premise->number())
-      continue;
-    use.other = other;
-    return;
-  }
-  ASSERTION_VIOLATION;
+  lastUse(generated, premise).other = other;
 }
 
 void InferenceStore::forget(Unit* u)
@@ -284,7 +279,7 @@ void InferenceStore::recordAbstraction(Clause* generated, Clause* premise,
     TermList b = *d->nthArgument(1);
     TermList x = a.isVar() && a.var() >= firstNewVar ? a : b;
     TermList t = x == a ? b : a;
-    ASS(x.isVar() && x.var() >= firstNewVar)
+    ASS(x.isVar() && x.var() >= firstNewVar);
     byVar.push({x.var(), d});
     undo.bindUnbound(x.var(), t);
   }
@@ -316,7 +311,7 @@ void InferenceStore::recordAbstraction(Clause* generated, Clause* premise,
 void InferenceStore::recordIntroduced(Clause* generated,
   const Stack<Literal*>& literals, unsigned variant, const Stack<Literal*>& sources)
 {
-  ASS(sources.isEmpty() || sources.size() == literals.size())
+  ASS(sources.isEmpty() || sources.size() == literals.size());
   _introduced.set(generated->number(), {literals, variant, sources});
 }
 

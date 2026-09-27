@@ -259,8 +259,9 @@ private:
           return i;
         }
       }
+      // Where nothing is: replay rejects a placement past the clause's end.
       ASSERTION_VIOLATION;
-      return 0;
+      return Kernel::InferenceStore::positionNone;
     };
 
     Formula* f = formula(gl);

@@ -132,7 +132,7 @@ class Signature
     /** proxy type */
     Proxy _prox;
     int _deBruijnIndex;
-    /** When the symbol was created, among every function and predicate. */
+    /** When the symbol was created, among every symbol of the signature. */
     unsigned _created;
 
   public:

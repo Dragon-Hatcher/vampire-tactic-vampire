@@ -401,9 +401,9 @@ public:
    */
   struct GenClauseState {
     /** The state this one was reached from, or `stateNone`. */
-    unsigned parent;
+    unsigned parent = stateNone;
     /** The position replaced in that state, or `positionNone`. */
-    unsigned position;
+    unsigned position = positionNone;
     /** The signed subformulas of the clause as it stands. */
     Stack<std::pair<Formula*, bool>> literals;
     /** What was put in the replaced position. */
@@ -411,7 +411,7 @@ public:
     /** What each variable the clause quantifies has been bound to. */
     Stack<std::pair<unsigned, TermList>> bindings;
     /** How the state was reached: one of the `gen*` constants below. */
-    unsigned how;
+    unsigned how = genIntroduced;
     /**
      * Where each literal the step pushed went, in the order it pushed them,
      * with `genTurned` set where the push stored `~f` at a sign as `f` at the
@@ -498,6 +498,9 @@ public:
   struct ProofPrinter;
 
 private:
+  /** The last use of @b premise recorded for @b generated. */
+  PremiseUse& lastUse(Unit* generated, Unit* premise);
+
   unsigned _polarityFlipBoundary = 0;
 
   DHMap<unsigned, Stack<Naming>> _namings;
