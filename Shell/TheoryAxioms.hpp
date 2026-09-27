@@ -104,7 +104,8 @@ private:
      recursive) */
   bool addSubtermDefinitions(unsigned subtermPredicate, TermAlgebraConstructor* c);
 
-  void addTheoryClauseFromLits(std::initializer_list<Literal*> lits, InferenceRule rule, unsigned level);
+  void addTheoryClauseFromLits(std::initializer_list<Literal*> lits, InferenceRule rule, unsigned level,
+    unsigned variant = 0);
   void addAndOutputTheoryUnit(Unit* unit, unsigned level);
 };
 

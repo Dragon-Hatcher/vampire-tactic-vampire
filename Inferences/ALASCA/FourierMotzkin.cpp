@@ -147,20 +147,26 @@ Option<Clause*> FourierMotzkinConf::applyRule_(
       resolventTerm = add(resolventTerm, NumTraits::constantTl(-1));
     }
 
+    // What the inference built, for replay: the resolvent, and the equation
+    // where both premises were tight.
+    Stack<Literal*> introduced;
 #if __ALASCA_Inferences_FM_DERIVE_EQUALITIES
     // (k t₁ + j t₂ > 0)σ
     out.push(NumTraits::greater(true, resolventTerm, NumTraits::zero()));
+    introduced.push(out.top());
 
     if (tight) {
       auto rhsSum = // -> (-k s₂ + t₂)σ
         sigma(rhs.literal(), rhsVarBank)->termArg(0);
       out.push(NumTraits::eq(true, rhsSum, NumTraits::zero()));
+      introduced.push(out.top());
     }
 #else 
                    // (k t₁ + j t₂ >= 0)σ
     out.push(tight ? NumTraits::geq    (true, resolventTerm, NumTraits::zero())
                    // (k t₁ + j t₂ > 0)σ
                    : NumTraits::greater(true, resolventTerm, NumTraits::zero()));
+    introduced.push(out.top());
 
 #endif
 
@@ -184,8 +190,13 @@ Option<Clause*> FourierMotzkinConf::applyRule_(
           s.bindUnbound(v, uwa.subs().apply(TermList(v, false), bank));
         InferenceStore::instance()->recordPremiseUse(cl, premise, on, atom, 0, s);
       };
+      // Each premise's coefficient of the atom as its other term: `j` of the
+      // first and `k`, its magnitude, of the second.
       record(lhs.clause(), lhsVarBank, lhs.literal(), s1);
+      InferenceStore::instance()->recordOther(cl, lhs.clause(), NumTraits::constantTl(j));
       record(rhs.clause(), rhsVarBank, rhs.literal(), s2);
+      InferenceStore::instance()->recordOther(cl, rhs.clause(), NumTraits::constantTl(k));
+      InferenceStore::instance()->recordIntroduced(cl, introduced);
       InferenceStore::instance()->recordConstraints(cl, firstConstraint,
         cnst->size());
     }

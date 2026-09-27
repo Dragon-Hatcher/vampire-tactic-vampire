@@ -231,6 +231,7 @@ void InferenceStore::forget(Unit* u)
   _literalImages.remove(u->number());
   _splittingNameLiterals.remove(u->number());
   _genClauseOfClause.remove(u->number());
+  _introduced.remove(u->number());
   _conjunctChoices.remove(u->number());
   _namings.remove(u->number());
 }
@@ -244,6 +245,17 @@ void InferenceStore::recordConstraints(Clause* generated, unsigned first,
   for (unsigned i = first; i < first + count; i++)
     literals.push((*generated)[i]);
   _constraints.set(generated->number(), std::move(literals));
+}
+
+void InferenceStore::recordIntroduced(Clause* generated,
+  const Stack<Literal*>& literals, unsigned variant)
+{
+  _introduced.set(generated->number(), {literals, variant});
+}
+
+const InferenceStore::Introduced* InferenceStore::introduced(Unit* u) const
+{
+  return _introduced.findPtr(u->number());
 }
 
 void InferenceStore::recordLiteralImages(Unit* generated,

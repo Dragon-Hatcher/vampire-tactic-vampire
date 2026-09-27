@@ -29,6 +29,7 @@
 #include "Skolem.hpp"
 #include "SymCounter.hpp"
 #include "TheoryAxioms.hpp"
+#include "Kernel/InferenceStore.hpp"
 #include "Options.hpp"
 
 using namespace std;
@@ -64,7 +65,8 @@ void TheoryAxioms::addAndOutputTheoryUnit(Unit* unit, unsigned level)
  * @since 11/11/2013, Manchester: output of the clause added
  * @author Andrei Voronkov
  */
-void TheoryAxioms::addTheoryClauseFromLits(std::initializer_list<Literal*> lits, InferenceRule rule, unsigned level)
+void TheoryAxioms::addTheoryClauseFromLits(std::initializer_list<Literal*> lits, InferenceRule rule, unsigned level,
+  unsigned variant)
 {
   LiteralStack lit_stack;
   for (Literal* lit : lits) {
@@ -72,6 +74,8 @@ void TheoryAxioms::addTheoryClauseFromLits(std::initializer_list<Literal*> lits,
     lit_stack.push(lit);
   }
   Clause* cl = Clause::fromStack(lit_stack, TheoryAxiom(rule));
+  // The axiom's literals, in the order it lists them, for replay.
+  InferenceStore::instance()->recordIntroduced(cl, lit_stack, variant);
   addAndOutputTheoryUnit(cl, level);
 } // addTheoryClauseFromLits
 
@@ -378,9 +382,10 @@ struct AlascaAxioms {
     auto x = TermList::var(0);                                                            \
     auto y = TermList::var(1);                                                            \
     auto z = TermList::var(2);                                                            \
+    unsigned variant = 0;                                                                 \
     auto addAx = [&](std::initializer_list<Literal*> clause) {                            \
       ax.addTheoryClauseFromLits(clause,                                                  \
-          InferenceRule::THA_ALASCA, TheoryAxioms::EXPENSIVE);                             \
+          InferenceRule::THA_ALASCA, TheoryAxioms::EXPENSIVE, variant++);                  \
     };                                                                                    \
     auto add = [&](auto l, auto r) -> TermList { return num.add(l,r); };                  \
     auto mul = [&](auto l, auto r) -> TermList { return num.mul(l,r); };                  \

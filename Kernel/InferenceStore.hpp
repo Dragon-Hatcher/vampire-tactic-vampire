@@ -241,6 +241,22 @@ public:
   const Stack<Literal*>* constraints(Unit* u) const;
 
   /**
+   * The literals an inference built its conclusion of, rather than carried
+   * from a premise, in the order it built them: a theory axiom's, say, which
+   * is a fixed list of literals. Literal selection permutes a clause in place
+   * after it is made, so the literals are kept rather than where they sit.
+   * @b variant tells apart the clauses a rule builds of different shapes.
+   */
+  struct Introduced {
+    Stack<Literal*> literals;
+    unsigned variant;
+  };
+  void recordIntroduced(Clause* generated, const Stack<Literal*>& literals,
+    unsigned variant = 0);
+  /** @b u's introduced literals, null if it recorded none. */
+  const Introduced* introduced(Unit* u) const;
+
+  /**
    * What one literal of a literal-wise simplification's premise became.
    *
    * Evaluation, theory normalization, ALASCA normalization and cancellation
@@ -428,6 +444,7 @@ private:
   DHMap<unsigned, Stack<Naming>> _namings;
   Stack<GenClauseState> _genClauseStates;
   DHMap<unsigned, unsigned> _genClauseOfClause;
+  DHMap<unsigned, Introduced, FnvHash, IdentityHash> _introduced;
   DHMap<unsigned, Stack<std::pair<Formula*, unsigned>>> _conjunctChoices;
 
   struct TPTPProofPrinter;
