@@ -74,8 +74,13 @@ struct IntegerFourierMotzkinConf
     };
     record(prem0.clause(), varBank0, prem0.literal(), monomial(prem0), prem0.notSelectedTerm());
     record(prem1.clause(), varBank1, prem1.literal(), monomial(prem1), prem1.notSelectedTerm());
-    if (prem2)
+    if (prem2) {
       record(prem2->clause(), varBank2, prem2->self.literal(), prem2->u(), NumTraits::constantTl(prem2->j()));
+      // `j s + u` is the premise's term negated where its coefficient of `s`
+      // is negative: `j` is that coefficient's absolute value.
+      if (!prem2->rawJ().isPositive())
+        InferenceStore::instance()->recordNegated(cl, prem2->clause());
+    }
   }
 
   // prem0:  s + t0 > 0
@@ -134,7 +139,13 @@ struct IntegerFourierMotzkinConf
     ASS(j.isPositive())
     // auto s_sigma = sigma0(prem0.selectedTerm());
 
-    auto ceil = [](auto x) { return NumTraits::minus(NumTraits::floor(NumTraits::minus(x))); };
+    // For replay: the floor each ceiling is the negation of, where one is built.
+    TermList floorArg0 = TermList::empty();
+    TermList floorArg1 = TermList::empty();
+    auto ceil = [](auto x, TermList& floorArg) {
+      floorArg = NumTraits::minus(x);
+      return NumTraits::minus(NumTraits::floor(floorArg));
+    };
     auto sum = [](auto... xs) { return NumTraits::sum(iterItems(TermList(xs)...)); };
     auto mul = [](auto l, auto r) { return NumTraits::mul(NumTraits::constantTl(l), r); };
 
@@ -155,7 +166,7 @@ struct IntegerFourierMotzkinConf
       // <-> s + (u + ⌈j t0 - u⌉ - 1)/j >= 0
       //         ^^^^^^^^^^^^^^^^^^^^^^--> t0_strengthened
       : mul(1/j, sum( u_s 
-                    , ceil(sum(mul(j, t0_s), NumTraits::minus(u_s)))
+                    , ceil(sum(mul(j, t0_s), NumTraits::minus(u_s)), floorArg0)
                     , NumTraits::constantTl(-1)));
 
     auto t1_strengthened = p1 == AlascaPredicate::GREATER_EQ 
@@ -168,21 +179,29 @@ struct IntegerFourierMotzkinConf
       // <-> -s + (- u + ⌈j t1 + u⌉ - 1)/j >= 0
       //          ^^^^^^^^^^^^^^^^^^^^^^^^--> t1_strengthened
       : mul(1/j, sum( NumTraits::minus(u_s) 
-                    , ceil(sum(mul(j, t1_s), u_s))
+                    , ceil(sum(mul(j, t1_s), u_s), floorArg1)
                     , NumTraits::constantTl(-1)));
       // : sum(ceil(sum(mul(j, t0_s), NumTraits::minus(u_s))), NumTraits::constantTl(-1));
 
-    return some(mkClause(
+    auto sumLit = NumTraits::greater(true, sum(t0_strengthened, t1_strengthened), NumTraits::constantTl(0));
+    auto eqLit = NumTraits::eq(true, sum(s_s, t0_strengthened), NumTraits::constantTl(0));
+    Clause* out = mkClause(
           concatIters(
             prem0.contextLiterals().map([&](auto l) { return sigma0(l); }),
             prem1.contextLiterals().map([&](auto l) { return sigma1(l); }),
             std::move(c2_s),
             arrayIter(uwa.computeConstraintLiterals()),
-            iterItems(
-              NumTraits::greater(true, sum(t0_strengthened, t1_strengthened), NumTraits::constantTl(0)),
-              NumTraits::eq(true, sum(s_s, t0_strengthened), NumTraits::constantTl(0))
-            )
-          )));
+            iterItems(sumLit, eqLit)
+          ));
+    // For replay: the two literals it built, and the floors of their ceilings.
+    Stack<Literal*> built;
+    built.push(sumLit);
+    built.push(eqLit);
+    Stack<TermList> floors;
+    floors.push(floorArg0);
+    floors.push(floorArg1);
+    InferenceStore::instance()->recordIntroduced(out, built, 0, Stack<Literal*>(), floors);
+    return some(out);
   }
 };
 

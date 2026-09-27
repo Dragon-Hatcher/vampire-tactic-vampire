@@ -151,8 +151,13 @@ public:
      * the equation doing the rewriting in the premise it comes from.
      */
     TermList term;
-    /** `rewritesWholePremise`, or zero. */
+    /**
+     * `rewritesWholePremise` (1), VIRAS's virtual term (2, 4, 8), and
+     * `negatedFlag`, or zero.
+     */
     unsigned flags;
+    /** The premise states `term` negated: `j s + u` of a negative coefficient. */
+    static const unsigned negatedFlag = 16;
     Stack<std::pair<unsigned, TermList>> bindings;
     /**
      * A second term of the premise the inference acted on, empty if it acted
@@ -234,6 +239,12 @@ public:
    */
   void recordOther(Unit* generated, Unit* premise, TermList other);
 
+  /**
+   * That the last use of @b premise recorded for @b generated states its
+   * term negated: `PremiseUse::negatedFlag`.
+   */
+  void recordNegated(Unit* generated, Unit* premise);
+
   /** `PremiseUse::factor`, of the last use of @b premise recorded for @b generated. */
   void recordFactor(Unit* generated, Unit* premise, TermList factor);
 
@@ -276,9 +287,17 @@ public:
      * rewrite of one literal into several. Empty, or one per literal.
      */
     Stack<Literal*> sources;
+    /**
+     * Terms the inference built and replay has to be told of, in the order
+     * the rule lists them: those a lemma certifying it speaks of which the
+     * conclusion holds among others alike, such as integer Fourier-Motzkin's
+     * floors. An empty term where the rule built none there.
+     */
+    Stack<TermList> terms;
   };
   void recordIntroduced(Clause* generated, const Stack<Literal*>& literals,
-    unsigned variant = 0, const Stack<Literal*>& sources = Stack<Literal*>());
+    unsigned variant = 0, const Stack<Literal*>& sources = Stack<Literal*>(),
+    const Stack<TermList>& terms = Stack<TermList>());
   /**
    * For an inference that abstracted terms of @b premise into fresh variables,
    * `x ≠ t ∨ C[x]` of `C[t]`: @b abstractions the disequalities it made, and

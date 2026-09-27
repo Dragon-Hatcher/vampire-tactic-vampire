@@ -243,6 +243,11 @@ void InferenceStore::recordOther(Unit* generated, Unit* premise, TermList other)
   lastUse(generated, premise).other = other;
 }
 
+void InferenceStore::recordNegated(Unit* generated, Unit* premise)
+{
+  lastUse(generated, premise).flags |= PremiseUse::negatedFlag;
+}
+
 void InferenceStore::forget(Unit* u)
 {
   _premiseUses.remove(u->number());
@@ -309,10 +314,11 @@ void InferenceStore::recordAbstraction(Clause* generated, Clause* premise,
 }
 
 void InferenceStore::recordIntroduced(Clause* generated,
-  const Stack<Literal*>& literals, unsigned variant, const Stack<Literal*>& sources)
+  const Stack<Literal*>& literals, unsigned variant, const Stack<Literal*>& sources,
+  const Stack<TermList>& terms)
 {
   ASS(sources.isEmpty() || sources.size() == literals.size());
-  _introduced.set(generated->number(), {literals, variant, sources});
+  _introduced.set(generated->number(), {literals, variant, sources, terms});
 }
 
 const InferenceStore::Introduced* InferenceStore::introduced(Unit* u) const

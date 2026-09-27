@@ -233,6 +233,10 @@ public:
     record(lhs.clause(), lhsVarBank, lhs.self.literal(), js_u);
     InferenceStore::instance()->recordOther(out, lhs.clause(),
         NumTraits::constantTl(typename NumTraits::ConstantType(i)));
+    // `j s + u` is the premise's term negated where its coefficient of `s` is
+    // negative: `j` is that coefficient's absolute value.
+    if (!lhs.rawJ().isPositive())
+      InferenceStore::instance()->recordNegated(out, lhs.clause());
     record(rhs.clause(), rhsVarBank, rhs.self.literal(), rhs.toRewrite);
     return some(out).intoIter();
   }
