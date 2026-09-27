@@ -16,6 +16,8 @@
 #ifndef __ALASCA_Inferences_FloorBounds__
 #define __ALASCA_Inferences_FloorBounds__
 
+#include "Kernel/InferenceStore.hpp"
+#include "Kernel/Substitution.hpp"
 #include "Debug/Assertion.hpp"
 #include "Forwards.hpp"
 
@@ -33,8 +35,8 @@ using namespace Kernel;
 using namespace Indexing;
 using namespace Saturation;
 
-class FloorBounds 
-  : public GeneratingInferenceEngine 
+class FloorBounds
+  : public GeneratingInferenceEngine
 {
   using NumTraits = RealTraits;
 
@@ -45,22 +47,22 @@ class FloorBounds
   static TermList ceil(TermList t) { return minus(floor(minus(t))); }
 
   template<class... Args>
-  static TermList sum(Args... args) 
+  static TermList sum(Args... args)
   { return NumTraits::sum(iterItems(args...)); }
 
-  static Literal* greater0(TermList t) 
+  static Literal* greater0(TermList t)
   { return NumTraits::greater(/* polarity */ true, t, NumTraits::zero()); }
 
-  static Literal* geq0(TermList t) 
+  static Literal* geq0(TermList t)
   { return NumTraits::geq(/* polarity */ true, t, NumTraits::zero()); }
 
-  static Literal* eq(TermList s, TermList t) 
+  static Literal* eq(TermList s, TermList t)
   { return NumTraits::eq(/* polarity */ true, s, t); }
 
-  static Literal* eq0(TermList s) 
+  static Literal* eq0(TermList s)
   { return NumTraits::eq(/* polarity */ true, s, numeral(0)); }
 
-  static TermList numeral(int i) 
+  static TermList numeral(int i)
   { return NumTraits::constantTl(i); }
 
   template<class Premise, class... Lits>
@@ -68,6 +70,25 @@ class FloorBounds
     return Clause::fromIterator(
         concatIters(premise.contextLiterals(), iterItems(lits...)),
         GeneratingInference1(InferenceRule::ALASCA_FLOOR_BOUNDS, premise.clause()));
+  }
+
+  /**
+   * `resClause`, recording for replay which of the rule's six shapes it is,
+   * the premise's floor `⌊s⌋` and other term `t`, the coefficient `k` of the
+   * floor (its magnitude), and the literals it built.
+   */
+  template<class Premise, class... Lits>
+  static Clause* recorded(Premise const& premise, unsigned variant, TermList other,
+      TermList factor, Lits... lits) {
+    Clause* cl = resClause(premise, lits...);
+    InferenceStore::instance()->recordPremiseUse(cl, premise.clause(), premise.literal(),
+      premise.selectedAtom(), 0, Substitution());
+    InferenceStore::instance()->recordOther(cl, premise.clause(), other);
+    InferenceStore::instance()->recordFactor(cl, premise.clause(), factor);
+    Stack<Literal*> built;
+    (built.push(lits), ...);
+    InferenceStore::instance()->recordIntroduced(cl, built, variant);
+    return cl;
   }
 
   auto generateClauses(Superposition::Lhs const& premise) const
@@ -79,31 +100,32 @@ class FloorBounds
     // C \/ t − s + 1 > 0
     // C \/ s − t ≥ 0
     return iterItems<Clause*>(
-        resClause(premise, greater0(sum(t, minus(s), numeral(1)))),
-        resClause(premise, geq0(sum(s, minus(t))))
+        recorded(premise, 0, t, premise.factor(), greater0(sum(t, minus(s), numeral(1)))),
+        recorded(premise, 1, t, premise.factor(), geq0(sum(s, minus(t))))
         );
   }
 
-  auto generateClauses(FourierMotzkin::Lhs const& premise) const 
+  auto generateClauses(FourierMotzkin::Lhs const& premise) const
   {
     ASS(premise.numeral<NumTraits>().isPositive())
     auto s = NumTraits::ifFloor(premise.selectedAtom(), [](auto s) { return s; }).unwrap();
     auto t = premise.notSelectedTerm();
     auto pred = premise.alascaPredicate().unwrap();
     ASS(isInequality(pred))
+    auto k = NumTraits::constantTl(premise.template numeral<NumTraits>().abs());
 
 
     return iterItems(
         // +⌊s⌋ >=  -t       x - ⌊x⌋ >= 0
         // ================================
         // C ∨ s + ⌊t⌋ > 0 ∨ ⌊s⌋ + ⌊t⌋ ≈ 0
-          pred == AlascaPredicate::GREATER_EQ ? resClause(premise, 
-              greater0(sum(s, floor(t))), 
+          pred == AlascaPredicate::GREATER_EQ ? recorded(premise, 2, t, k,
+              greater0(sum(s, floor(t))),
               eq0(sum(floor(s), floor(t))))
-        // +⌊s⌋ + t > 0      
+        // +⌊s⌋ + t > 0
         // ======================================
         // +s + ⌈t⌉ - 1 > 0 \/  ⌊s⌋ + ⌈t⌉ - 1 = 0
-        : pred == AlascaPredicate::GREATER    ? resClause(premise, 
+        : pred == AlascaPredicate::GREATER    ? recorded(premise, 3, t, k,
             greater0(sum(s, ceil(t), numeral(-1))),
             eq0(sum(floor(s), ceil(t), numeral(-1))))
         : assertionViolation<Clause*>()
@@ -111,25 +133,26 @@ class FloorBounds
   }
 
 
-  auto generateClauses(FourierMotzkin::Rhs const& premise) const 
+  auto generateClauses(FourierMotzkin::Rhs const& premise) const
   {
     ASS(premise.numeral<NumTraits>().isNegative())
     auto s = NumTraits::ifFloor(premise.selectedAtom(), [](auto s) { return s; }).unwrap();
     auto t = premise.notSelectedTerm();
     auto pred = premise.alascaPredicate().unwrap();
     ASS(isInequality(pred))
+    auto k = NumTraits::constantTl(premise.template numeral<NumTraits>().abs());
 
     return iterItems(
-          //       -⌊s⌋ + t >= 0        
+          //       -⌊s⌋ + t >= 0
           // ============================
           // −s + ⌊t⌋ > 0 ∨ -⌊s⌋ + ⌊t⌋ ≈ 0
-            pred == AlascaPredicate::GREATER_EQ ? resClause(premise, 
+            pred == AlascaPredicate::GREATER_EQ ? recorded(premise, 4, t, k,
                                greater0(sum(minus(s), floor(t))),
                                eq0(sum(minus(floor(s)), floor(t))))
           //             -⌊s⌋ + t > 0
           // =====================================
           // −⌊s⌋ + ⌈t⌉ − 1 ≈ 0 ∨ −s + ⌈t⌉ − 1 > 0
-          : pred == AlascaPredicate::GREATER ?  resClause(premise, 
+          : pred == AlascaPredicate::GREATER ?  recorded(premise, 5, t, k,
                                greater0(sum(minus(s), ceil(t), numeral(-1))),
                                eq0(sum(minus(floor(s)), ceil(t), numeral(-1))))
           : assertionViolation<Clause*>()
@@ -147,7 +170,7 @@ public:
   USE_ALLOCATOR(FloorBounds);
 
   FloorBounds(FloorBounds&&) = default;
-  FloorBounds(SaturationAlgorithm& salg) 
+  FloorBounds(SaturationAlgorithm& salg)
     : _shared(salg.alascaState())
   {  }
 
@@ -161,8 +184,8 @@ public:
   }
 };
 
-} // namespace ALASCA 
-} // namespace Inferences 
+} // namespace ALASCA
+} // namespace Inferences
 
 
 #endif /*__ALASCA_Inferences_FloorBounds__*/

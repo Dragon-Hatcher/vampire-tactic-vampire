@@ -86,7 +86,8 @@ SimplifyingGeneratingInference1::Result GaussianVariableElimination::rewrite(Cla
     cl.collectVars(vars);
     for (unsigned v : iterTraits(vars.iterator()))
       s.bindUnbound(v, v == find.var() ? replace : TermList(v, false));
-    InferenceStore::instance()->recordPremiseUse(res, &cl, nullptr,
+    // And the literal it solved, which the instance makes false.
+    InferenceStore::instance()->recordPremiseUse(res, &cl, cl[skipLiteral],
       TermList::empty(), 0, s);
   }
   return SimplifyingGeneratingInference1::Result{res, premiseRedundant};
