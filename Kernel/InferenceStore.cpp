@@ -210,6 +210,20 @@ void InferenceStore::recordRewritten(Unit* generated, Unit* premise, Literal* fr
   ASSERTION_VIOLATION;
 }
 
+void InferenceStore::recordFactor(Unit* generated, Unit* premise, TermList factor)
+{
+  Stack<PremiseUse>* uses = _premiseUses.findPtr(generated->number());
+  ASS(uses);
+  for (unsigned i = uses->size(); i-- > 0;) {
+    PremiseUse& use = (*uses)[i];
+    if (use.premise != premise->number())
+      continue;
+    use.factor = factor;
+    return;
+  }
+  ASSERTION_VIOLATION;
+}
+
 void InferenceStore::recordOther(Unit* generated, Unit* premise, TermList other)
 {
   Stack<PremiseUse>* uses = _premiseUses.findPtr(generated->number());

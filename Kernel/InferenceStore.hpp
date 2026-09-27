@@ -159,6 +159,13 @@ public:
      * with. `recordOther`.
      */
     TermList other = TermList::empty();
+    /**
+     * A numeral the inference scaled the use's term by, empty if none: the
+     * coefficient `k` of the atom an arithmetic equation `k s + t = 0`
+     * rewrites, which makes `s = -t/k` follow from it by `k (s + t/k) = 0`.
+     * `recordFactor`.
+     */
+    TermList factor = TermList::empty();
     /** The premise's literals the inference rewrote, `recordRewritten`. */
     Stack<RewrittenLiteral> rewritten = Stack<RewrittenLiteral>();
   };
@@ -215,6 +222,9 @@ public:
    * use's bindings instantiate.
    */
   void recordOther(Unit* generated, Unit* premise, TermList other);
+
+  /** `PremiseUse::factor`, of the last use of @b premise recorded for @b generated. */
+  void recordFactor(Unit* generated, Unit* premise, TermList factor);
 
   /** How @b u used each of its premises, empty when nothing was recorded. */
   const Stack<PremiseUse>* premiseUses(Unit* u) const;

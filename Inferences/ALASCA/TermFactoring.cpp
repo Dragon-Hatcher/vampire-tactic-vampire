@@ -175,6 +175,12 @@ Option<Clause*> TermFactoring::applyRule(
       s.bindUnbound(v, uwa->subs().apply(TermList(v, false), 0));
     InferenceStore::instance()->recordPremiseUse(clause, sel1.clause(), sel1.literal(), s1, 0, s);
     InferenceStore::instance()->recordOther(clause, sel1.clause(), s2);
+    // What the premise's first argument became: the sum, or zero where the
+    // premise states its equation the other way round.
+    auto zero = NumTraits::zero();
+    InferenceStore::instance()->recordRewritten(clause, sel1.clause(), sel1.literal(), resLit,
+      !resLit->isEquality() ? TermList::empty()
+        : *sel1.literal()->nthArgument(0) == zero ? zero : resSum);
     InferenceStore::instance()->recordConstraints(clause, firstConstraint, cnst->size());
   }
   DEBUG("result: ", *clause);

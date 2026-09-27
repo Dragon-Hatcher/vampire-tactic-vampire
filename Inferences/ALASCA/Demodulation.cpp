@@ -109,6 +109,7 @@ Option<Clause*> Demodulation::apply(
     auto t = lhs.smallerSide();
     if (!(*eq->nthArgument(0) == t || *eq->nthArgument(1) == t)) {
       InferenceStore::instance()->recordOther(out, lhs.clause(), t);
+      InferenceStore::instance()->recordFactor(out, lhs.clause(), lhs.factor());
     }
     // The rewrite is of the whole premise; the literal recorded is one it
     // rewrote in.

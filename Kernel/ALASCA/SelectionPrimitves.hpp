@@ -253,6 +253,22 @@ namespace Kernel {
     explicit SelectedEquality(SelectedUninterpretedEquality s) 
       : _inner(decltype(_inner)(std::move(s))) {}
 
+    /**
+     * The numeral `k` an arithmetic equation `k s + t = 0` is `k (s - smallerSide())`
+     * by: the coefficient of its atom, and 1 at the integers, whose bigger side
+     * is the monomial `k s` itself. Empty for an equation of uninterpreted terms.
+     */
+    TermList factor() const
+    { return _inner.match(
+        [](SelectedSummand const& x) {
+          return x.numTraits().apply([&](auto numTraits) {
+            using NumTraits = decltype(numTraits);
+            return NumTraits::constantTl(x.template numeral<NumTraits>());
+          });
+        },
+        [](SelectedIntegerEquality const&) { return IntTraits::constantTl(1); },
+        [](SelectedUninterpretedEquality const&) { return TermList::empty(); }); }
+
     Clause* clause() const 
     { return _inner.apply([](auto& x) { return x.clause(); }); }
 
