@@ -60,6 +60,8 @@ Signature::Symbol::Symbol(const std::string& nm, OperatorType* type, bool interp
     _deBruijnIndex(-1)
 {
   ASS(_type);
+  static unsigned symbolsCreated = 0;
+  _created = symbolsCreated++;
   if (!preventQuoting && symbolNeedsQuoting(_name, interpreted, arity())) {
     _name="'"+_name+"'";
   }

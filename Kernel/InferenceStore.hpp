@@ -90,6 +90,8 @@ public:
    */
   Literal* splittingNameLiteral(Unit* us) const;
   void recordIntroducedSymbol(Unit* u, Signature::Symbol* sym);
+  /** The first symbol @b u was recorded to introduce, or nullptr. */
+  Signature::Symbol* firstIntroducedSymbol(Unit* u) const;
   void recordIntroducedSkolemSymbol(Unit* u, Signature::Symbol* sym, unsigned replacedVar, Term* symTerm);
   void recordIntroducedSplitName(Unit* u, std::string name);
 

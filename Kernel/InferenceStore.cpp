@@ -98,6 +98,15 @@ void InferenceStore::recordIntroducedSymbol(Unit* u, Signature::Symbol* sym)
   pStack->push(sym);
 }
 
+Signature::Symbol* InferenceStore::firstIntroducedSymbol(Unit* u) const
+{
+  const SymbolStack* symbols = _introducedSymbols.findPtr(u->number());
+  if (!symbols || symbols->isEmpty()) {
+    return nullptr;
+  }
+  return (*symbols)[0];
+}
+
 void InferenceStore::recordIntroducedSkolemSymbol(Unit* u, Signature::Symbol* sym, unsigned replacedVar, Term* symTerm)
 {
   ASS_REP(sym->introduced(), sym->name());

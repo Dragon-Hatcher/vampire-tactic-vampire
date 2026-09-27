@@ -132,6 +132,8 @@ class Signature
     /** proxy type */
     Proxy _prox;
     int _deBruijnIndex;
+    /** When the symbol was created, among every function and predicate. */
+    unsigned _created;
 
   public:
     /** standard constructor */
@@ -177,6 +179,8 @@ class Signature
      * this includes the term as well as the type arguments of the symbol
      */
     inline unsigned arity() const { return _type->arity(); }
+    /** When the symbol was created: a symbol is made of what exists already. */
+    inline unsigned created() const { return _created; }
     /* the number of term arguments for this symbol */
     inline unsigned numTermArguments() const { return arity() - numTypeArguments(); }
     /** Return the type argument arity of the symbol. Only accurate once type has been set. */
