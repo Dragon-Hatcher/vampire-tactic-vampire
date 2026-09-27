@@ -201,18 +201,24 @@ public:
     auto js_uσ = sigmaL(js_u);
 
     if (i == 0) return Option<Clause*>().intoIter();
+    auto rewritten = EqHelper::replace(Lσ, toRewriteσ,
+                // TermList::var(0)
+                add(floor(add(ks_tσ, mul(-i, js_uσ))), mul(i, js_uσ)));
     auto out = Clause::fromIterator(
           concatIters(
             lhs.contextLiterals().map([=](auto l) { return sigmaL(l); }),
             rhs.contextLiterals().map([=](auto l) { return sigmaR(l); }),
             arrayIter(*cnstr).map([](auto& literal) { return literal; }),
-            iterItems(EqHelper::replace(Lσ, toRewriteσ, 
-                // TermList::var(0)
-                add(floor(add(ks_tσ, mul(-i, js_uσ))), mul(i, js_uσ))
-            ))
+            iterItems(rewritten)
           ), 
           Inference(GeneratingInference2(Kernel::InferenceRule::ALASCA_COHERENCE, lhs.clause(), rhs.clause()))
           );
+    // For replay: which literal is the rewritten one.
+    {
+      Stack<Literal*> built;
+      built.push(rewritten);
+      InferenceStore::instance()->recordIntroduced(out, built);
+    }
     // For replay: each premise's substitution, and the terms the conclusion
     // is built of -- `j s + u` and `i` of the first, the floor rewritten of
     // the second.
@@ -264,12 +270,18 @@ struct CoherenceNormalization : SimplifyingGeneratingInference {
     if (_shared.norm().equivalent(floor_s, floor_t) ) {
       return {};
     } else {
-      return some(Clause::fromIterator(
+      auto normalized = NumTraits::eq(true, t, floor_t);
+      auto out = Clause::fromIterator(
           concatIters(
             prem.contextLiterals(),
-            iterItems(NumTraits::eq(true, t, floor_t))
+            iterItems(normalized)
           ),
-          Inference(GeneratingInference1(InferenceRule::ALASCA_COHERENCE_NORMALIZATION, prem.clause()))));
+          Inference(GeneratingInference1(InferenceRule::ALASCA_COHERENCE_NORMALIZATION, prem.clause())));
+      // For replay: which literal is the one it built.
+      Stack<Literal*> built;
+      built.push(normalized);
+      InferenceStore::instance()->recordIntroduced(out, built);
+      return some(out);
     }
   }
 };
