@@ -175,8 +175,16 @@ Option<Clause*> InequalityFactoring::applyRule(
     premise->collectVars(vars);
     for (unsigned v : iterTraits(vars.iterator()))
       s.bindUnbound(v, uwa->subs().apply(TermList(v, false), 0));
+    // Each comparison factored, with the coefficient of its atom: the one the
+    // pivot is made of first, then the one carried.
     InferenceStore::instance()->recordPremiseUse(out, premise, l1.literal(), s1, 0, s);
     InferenceStore::instance()->recordOther(out, premise, s2);
+    InferenceStore::instance()->recordFactor(out, premise, NumTraits::constantTl(j));
+    InferenceStore::instance()->recordPremiseUse(out, premise, l2.literal(), s2, 0, s);
+    InferenceStore::instance()->recordFactor(out, premise, NumTraits::constantTl(k));
+    Stack<Literal*> built;
+    built.push(pivotLit);
+    InferenceStore::instance()->recordIntroduced(out, built);
     InferenceStore::instance()->recordConstraints(out, firstConstraint, cnst->size());
   }
   DEBUG("conclusion: ", *out)

@@ -133,7 +133,9 @@ Option<SimplifyingGeneratingInference::ClauseGenerationResult> VirasQuantifierEl
     return some(ClauseGenerationResult {
       .clauses = pvi(
           intoVampireIter(viras.quantifier_elimination(var, &*toElim))
-            .map([premise, elimVar, toElim = Stack<Literal*>(*toElim), otherLits = std::move(otherLits)](auto litIter) {
+            .map([premise, elimVar, toElim = Stack<Literal*>(*toElim), otherLits = std::move(otherLits)](auto vtLits) {
+              auto& vt = vtLits.first;
+              auto litIter = std::move(vtLits.second);
               // What each of the premise's literals became: those eliminated
               // from, in order, and the others as they are.
               Stack<Literal*> lits;
@@ -152,9 +154,16 @@ Option<SimplifyingGeneratingInference::ClauseGenerationResult> VirasQuantifierEl
                   Inference(SimplifyingInference1(InferenceRule::ALASCA_VIRAS_QE, premise)));
               InferenceStore::instance()->recordLiteralImages(cl,
                 InferenceStore::LiteralProcedure::VIRAS, std::move(images));
-              // Which variable was eliminated: the term the step acted on.
+              // Which variable was eliminated: the term the step acted on;
+              // and the virtual term substituted for it, which made this
+              // conclusion rather than another of the elimination set's.
+              unsigned flags = (vt.epsilon ? InferenceStore::virtualEpsilon : 0)
+                | (vt.infty && vt.infty->positive ? InferenceStore::virtualPlusInfinity : 0)
+                | (vt.infty && !vt.infty->positive ? InferenceStore::virtualMinusInfinity : 0);
               InferenceStore::instance()->recordPremiseUse(cl, premise,
-                nullptr, TermList::var(elimVar), 0, Substitution());
+                nullptr, TermList::var(elimVar), flags, Substitution());
+              if (vt.term)
+                InferenceStore::instance()->recordOther(cl, premise, vt.term->inner);
               return cl;
             })
           )

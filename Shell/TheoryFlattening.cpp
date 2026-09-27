@@ -13,6 +13,7 @@
  */
 
 #include "TheoryFlattening.hpp"
+#include "Kernel/InferenceStore.hpp"
 
 #include "Lib/Environment.hpp"
 
@@ -108,13 +109,19 @@ Clause* TheoryFlattening::apply(Clause*& cl,Stack<Literal*>& target)
 
   // literals to be processed, start with those in clause
   Stack<Literal*> lits;
+  // For replay: which premise literal each literal being processed came from,
+  // or null for a disequality made -- where flattening is recursive, what it
+  // makes is flattened again.
+  DHMap<Literal*, Literal*> origin;
   for(int i= cl->length()-1; i>=0;i--){
     Literal* lit = (*cl)[i];
+    origin.insert(lit, lit);
     if(target.isEmpty() || target.find(lit)){
       lits.push(lit);
     }
     else{ result.push(lit); }
   }
+  unsigned firstNewVar = maxVar + 1;
   
   DHMap<Term*,unsigned, FnvHash, PtrIdentityHash> abstracted;
 
@@ -128,6 +135,10 @@ Clause* TheoryFlattening::apply(Clause*& cl,Stack<Literal*>& target)
 
     Stack<Literal*> newLits;
     Literal* nlit = replaceTopTerms(lit,newLits,maxVar,abstracted);
+    Literal* from = origin.get(lit);
+    origin.set(nlit, from);
+    for (Literal* made : iterTraits(newLits.iterFifo()))
+      origin.set(made, nullptr);
     if(nlit==lit){
       ASS(newLits.isEmpty());
       result.push(lit);
@@ -149,6 +160,18 @@ Clause* TheoryFlattening::apply(Clause*& cl,Stack<Literal*>& target)
   if(!updated){ return cl;}
 
   Clause* rep = Clause::fromStack(result,SimplifyingInference1(InferenceRule::THEORY_FLATTENING,cl));
+  {
+    Stack<Literal*> abstractions;
+    Stack<std::pair<Literal*, Literal*>> rewritten;
+    for (Literal* r : iterTraits(result.iterFifo())) {
+      Literal* from = origin.get(r);
+      if (!from)
+        abstractions.push(r);
+      else if (from != r)
+        rewritten.push({from, r});
+    }
+    InferenceStore::instance()->recordAbstraction(rep, cl, abstractions, rewritten, firstNewVar);
+  }
 
   return rep;
 }

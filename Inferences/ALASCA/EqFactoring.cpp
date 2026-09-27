@@ -127,8 +127,18 @@ Option<Clause*> EqFactoring::applyRule(SelectedEquality const& l1, SelectedEqual
     l1.clause()->collectVars(vars);
     for (unsigned v : iterTraits(vars.iterator()))
       s.bindUnbound(v, uwa.subs().apply(TermList(v, false), 0));
+    // Each equation factored, `s ≈ t`, with its coefficient where it is
+    // arithmetic, `k s + … = 0`: the one carried first, then the one the
+    // disequality of their other sides takes the place of.
     InferenceStore::instance()->recordPremiseUse(out, l1.clause(), l1.literal(), s1, 0, s);
-    InferenceStore::instance()->recordOther(out, l1.clause(), s2);
+    InferenceStore::instance()->recordOther(out, l1.clause(), t1);
+    InferenceStore::instance()->recordFactor(out, l1.clause(), l1.factor());
+    InferenceStore::instance()->recordPremiseUse(out, l1.clause(), l2.literal(), s2, 0, s);
+    InferenceStore::instance()->recordOther(out, l1.clause(), t2);
+    InferenceStore::instance()->recordFactor(out, l1.clause(), l2.factor());
+    Stack<Literal*> built;
+    built.push(res);
+    InferenceStore::instance()->recordIntroduced(out, built);
     InferenceStore::instance()->recordConstraints(out, firstConstraint, cnst->size());
   }
   DEBUG("out: ", *out);

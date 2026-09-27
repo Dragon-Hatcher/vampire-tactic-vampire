@@ -177,6 +177,15 @@ public:
    */
   static const unsigned rewritesWholePremise = 1;
 
+  /**
+   * A virtual term VIRAS substituted for the variable it eliminated: plus an
+   * infinitesimal, and plus or minus infinity; its term, where it has one, is
+   * the use's other term.
+   */
+  static const unsigned virtualEpsilon = 2;
+  static const unsigned virtualPlusInfinity = 4;
+  static const unsigned virtualMinusInfinity = 8;
+
   /** A use that acted on none of @b premise's literals. */
   void recordPremiseUse(Unit* generated, Unit* premise, TermList term,
     unsigned flags, const Stack<std::pair<unsigned, TermList>>& bindings);
@@ -260,9 +269,27 @@ public:
   struct Introduced {
     Stack<Literal*> literals;
     unsigned variant;
+    /**
+     * The premise literal each was made of, where it was made of one: a
+     * rewrite of one literal into several. Empty, or one per literal.
+     */
+    Stack<Literal*> sources;
   };
   void recordIntroduced(Clause* generated, const Stack<Literal*>& literals,
-    unsigned variant = 0);
+    unsigned variant = 0, const Stack<Literal*>& sources = Stack<Literal*>());
+  /**
+   * For an inference that abstracted terms of @b premise into fresh variables,
+   * `x ≠ t ∨ C[x]` of `C[t]`: @b abstractions the disequalities it made, and
+   * @b rewritten each literal of the premise with what it became. Recorded
+   * as a use of the premise, the disequalities introduced in the order of
+   * their variables -- a term can mention a variable made after it -- and each
+   * literal rewritten with its sides as the premise's: which the abstraction
+   * undone, by the disequalities read as bindings, says.
+   */
+  void recordAbstraction(Clause* generated, Clause* premise,
+    const Stack<Literal*>& abstractions,
+    const Stack<std::pair<Literal*, Literal*>>& rewritten, unsigned firstNewVar);
+
   /** @b u's introduced literals, null if it recorded none. */
   const Introduced* introduced(Unit* u) const;
 

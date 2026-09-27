@@ -42,6 +42,7 @@
 #include "SortHelper.hpp"
 
 #include "InferenceStore.hpp"
+#include "Kernel/SubstHelper.hpp"
 #include "Term.hpp"
 #include "TermIterators.hpp"
 #include "SATSubsumption/SATSubsumptionAndResolution.hpp"
@@ -261,10 +262,53 @@ void InferenceStore::recordConstraints(Clause* generated, unsigned first,
   _constraints.set(generated->number(), std::move(literals));
 }
 
-void InferenceStore::recordIntroduced(Clause* generated,
-  const Stack<Literal*>& literals, unsigned variant)
+void InferenceStore::recordAbstraction(Clause* generated, Clause* premise,
+  const Stack<Literal*>& abstractions,
+  const Stack<std::pair<Literal*, Literal*>>& rewritten, unsigned firstNewVar)
 {
-  _introduced.set(generated->number(), {literals, variant});
+  recordPremiseUse(generated, premise, nullptr, TermList::empty(), 0, Substitution());
+  // Each disequality's variable is its side that is one of the new ones.
+  Stack<std::pair<unsigned, Literal*>> byVar;
+  Substitution undo;
+  for (Literal* d : iterTraits(abstractions.iterFifo())) {
+    TermList a = *d->nthArgument(0);
+    TermList b = *d->nthArgument(1);
+    TermList x = a.isVar() && a.var() >= firstNewVar ? a : b;
+    TermList t = x == a ? b : a;
+    ASS(x.isVar() && x.var() >= firstNewVar)
+    byVar.push({x.var(), d});
+    undo.bindUnbound(x.var(), t);
+  }
+  std::sort(byVar.begin(), byVar.end(),
+    [](auto const& l, auto const& r) { return l.first < r.first; });
+  Stack<Literal*> ordered;
+  for (auto [_, d] : iterTraits(byVar.iterFifo()))
+    ordered.push(d);
+  recordIntroduced(generated, ordered);
+  // A term undone of its abstractions, those inside it undone in turn.
+  auto undone = [&](TermList t) {
+    for (unsigned i = 0; i <= abstractions.size(); i++) {
+      TermList u = SubstHelper::apply(t, undo);
+      if (u == t)
+        break;
+      t = u;
+    }
+    return t;
+  };
+  for (auto [from, to] : iterTraits(rewritten.iterFifo())) {
+    TermList lhs = TermList::empty();
+    if (to->isEquality())
+      lhs = undone(*to->nthArgument(0)) == *from->nthArgument(0)
+        ? *to->nthArgument(0) : *to->nthArgument(1);
+    recordRewritten(generated, premise, from, to, lhs);
+  }
+}
+
+void InferenceStore::recordIntroduced(Clause* generated,
+  const Stack<Literal*>& literals, unsigned variant, const Stack<Literal*>& sources)
+{
+  ASS(sources.isEmpty() || sources.size() == literals.size())
+  _introduced.set(generated->number(), {literals, variant, sources});
 }
 
 const InferenceStore::Introduced* InferenceStore::introduced(Unit* u) const
