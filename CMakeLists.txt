@@ -141,14 +141,9 @@ endif()
 # VIRAS
 ################################################################
 
-# attempt to automatically checkout VIRAS
-if(GIT_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git" AND NOT EXISTS "${PROJECT_SOURCE_DIR}/viras/.git")
-  message(STATUS "VIRAS not checked out, running git submodule update")
-  execute_process(
-    COMMAND ${GIT_EXECUTABLE} submodule update --init viras
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  )
-endif()
+# VIRAS is part of this tree (vendored from https://github.com/joe-hauns/viras
+# at 8b8928f, with the change that records which virtual term made each
+# conclusion), not a submodule.
 
 # check for VIRAS
 if(NOT EXISTS "${PROJECT_SOURCE_DIR}/viras/README.md")
