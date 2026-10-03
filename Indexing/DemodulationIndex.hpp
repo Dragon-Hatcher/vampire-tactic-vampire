@@ -85,11 +85,38 @@ class DemodulationLHSIndex
 {
 public:
   DemodulationLHSIndex(SaturationAlgorithm& salg);
+  ~DemodulationLHSIndex() override { _live--; }
+
+  /**
+   * A clock every insertion of a demodulator moves on, over all indices, to
+   * tell when a term was found to have no demodulator rewriting it
+   * (Term::irreducibleAt): removals take demodulators away, so only what is
+   * inserted after can.
+   */
+  static unsigned clock() { return _clock; }
+
+  /**
+   * No demodulator that could rewrite a term with top symbol @b functor --
+   * one whose left-hand side has that symbol or is a variable -- was inserted
+   * into this index after @b clock. Never when another index is alive, which
+   * could have stamped a term that this one would rewrite.
+   */
+  bool noInsertionSince(unsigned functor, unsigned clock) const
+  {
+    return _live == 1 && clock >= _lastVarInsertion &&
+      (functor >= _lastInsertion.size() || clock >= _lastInsertion[functor]);
+  }
 protected:
   void handleClause(Clause* c, bool adding) override;
 private:
   Ordering& _ord;
   const bool _preordered;
+  /** the clock at the last insertion of a left-hand side, by its top symbol */
+  Stack<unsigned> _lastInsertion;
+  /** the clock at the last insertion of a variable left-hand side */
+  unsigned _lastVarInsertion = 0;
+  static unsigned _clock;
+  static unsigned _live;
 };
 
 } //namespace Indexing
