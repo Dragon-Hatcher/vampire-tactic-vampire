@@ -319,14 +319,29 @@ unsigned HashingClauseVariantIndex::computeHashAndCountVariables(TermList* ptl, 
 
   unsigned hash = termFunctorHash(t,hash_begin);
 
-  SubtermIterator sti(t);
-  while(sti.hasNext()) {
-    TermList tl = sti.next();
-
-    if (tl.isVar()) {
-      hash = computeHashAndCountVariables(tl.var(),varCnts,hash);
+  // The subterms in the order a SubtermIterator gives them -- each before its
+  // arguments, the arguments from the left -- walked here on the argument
+  // lists left to go, kept from one call to the next: this hashes every
+  // literal of every component splitting looks up.
+  static Stack<const TermList*> toDo;
+  toDo.reset();
+  const TermList* ts = t->args();
+  for (;;) {
+    if (ts->isEmpty()) {
+      if (toDo.isEmpty()) {
+        break;
+      }
+      ts = toDo.pop();
+      continue;
+    }
+    if (ts->isVar()) {
+      hash = computeHashAndCountVariables(ts->var(),varCnts,hash);
+      ts = ts->next();
     } else {
-      hash = termFunctorHash(tl.term(),hash);
+      Term* sub = const_cast<Term*>(ts->term());
+      hash = termFunctorHash(sub,hash);
+      toDo.push(ts->next());
+      ts = sub->args();
     }
   }
 
