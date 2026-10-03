@@ -491,11 +491,11 @@ void ClauseCodeTree::ClauseMatcher::init(ClauseCodeTree* tree_, Clause* query_, 
     if(!(*query)[i]->ground()) {
       continue;
     }
-    lInfos[liIndex]=LitInfo(query,i);
+    lInfos[liIndex]=LitInfo(query,i,spare());
     lInfos[liIndex].liIndex=liIndex;
     liIndex++;
     if((*query)[i]->isEquality()) {
-      lInfos[liIndex]=LitInfo::getReversed(lInfos[liIndex-1]);
+      lInfos[liIndex]=LitInfo::getReversed(lInfos[liIndex-1], spare());
       lInfos[liIndex].liIndex=liIndex;
       liIndex++;
     }
@@ -504,11 +504,11 @@ void ClauseCodeTree::ClauseMatcher::init(ClauseCodeTree* tree_, Clause* query_, 
     if((*query)[i]->ground()) {
       continue;
     }
-    lInfos[liIndex]=LitInfo(query,i);
+    lInfos[liIndex]=LitInfo(query,i,spare());
     lInfos[liIndex].liIndex=liIndex;
     liIndex++;
     if((*query)[i]->isEquality()) {
-      lInfos[liIndex]=LitInfo::getReversed(lInfos[liIndex-1]);
+      lInfos[liIndex]=LitInfo::getReversed(lInfos[liIndex-1], spare());
       lInfos[liIndex].liIndex=liIndex;
       liIndex++;
     }
@@ -516,7 +516,7 @@ void ClauseCodeTree::ClauseMatcher::init(ClauseCodeTree* tree_, Clause* query_, 
   if(sres) {
     for(unsigned i=0;i<baseLICnt;i++) {
       unsigned newIndex=i+baseLICnt;
-      lInfos[newIndex]=LitInfo::getOpposite(lInfos[i]);
+      lInfos[newIndex]=LitInfo::getOpposite(lInfos[i], spare());
       lInfos[newIndex].liIndex=newIndex;
     }
     sresLiteral=sresNoLiteral;
@@ -530,7 +530,13 @@ void ClauseCodeTree::ClauseMatcher::reset()
 {
   unsigned liCnt=lInfos.size();
   for(unsigned i=0;i<liCnt;i++) {
-    lInfos[i].dispose();
+    // A large one is not kept, so that one large query does not hold its
+    // room for as long as the matcher is recycled.
+    if (lInfos[i].ft->capacity() <= MAX_SPARE_ENTRIES && _spares.size() < MAX_SPARES) {
+      _spares.push(lInfos[i].ft);
+    } else {
+      lInfos[i].dispose();
+    }
   }
   lms.reset();
 

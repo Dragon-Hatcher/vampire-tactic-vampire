@@ -116,6 +116,7 @@ public:
   /* INFO: we ignore unifying the sort of the keys here */
   void handle(Data data, bool insert)
   {
+    count(data.key(), insert);
     if (insert) {
       auto ti = new Data(std::move(data));
       _ct.insert(ti);
@@ -128,12 +129,40 @@ public:
     if(_ct.isEmpty()) {
       return VirtualIterator<GenSubstitutionQR<Data>>::getEmpty();
     }
+    // A key that is a term generalizes only terms with its own top symbol, so
+    // when there is no key with this one, and none that is a variable, there
+    // is nothing to retrieve, and nothing is set up to retrieve it: most terms
+    // a simplification asks about have no generalization at all.
+    if (t.isTerm() && !t.term()->isSort() && !_variableKeys
+        && !_keysByTop.find(t.term()->functor())) {
+      return VirtualIterator<GenSubstitutionQR<Data>>::getEmpty();
+    }
 
     return vi( new ResultIterator<Data, typename TermCodeTree<Data>::TermMatcher>(_ct, t) );
   }
 
 private:
+  void count(TermList key, bool insert)
+  {
+    // A sort's symbols are numbered apart from a term's, so a sort key is
+    // counted with the variables: it is never filtered out.
+    if (key.isVar() || key.term()->isSort()) {
+      if (insert) _variableKeys++; else _variableKeys--;
+      return;
+    }
+    unsigned* n;
+    _keysByTop.getValuePtr(key.term()->functor(), n, 0);
+    if (insert) {
+      (*n)++;
+    } else if (--*n == 0) {
+      _keysByTop.remove(key.term()->functor());
+    }
+  }
+
   TermCodeTree<Data> _ct;
+  /** How many keys there are with each top symbol, and how many are variables or sorts. */
+  DHMap<unsigned, unsigned> _keysByTop;
+  unsigned _variableKeys = 0;
 };
 
 /**

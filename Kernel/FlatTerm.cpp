@@ -50,12 +50,12 @@ void* FlatTerm::operator new(size_t sz,unsigned num)
  */
 void FlatTerm::destroy()
 {
-  ASS_GE(_length,0);
+  ASS_GE(_capacity,_length);
 
   //one entry is already accounted for in the size of the FlatTerm object
   size_t size = sizeof(FlatTerm);
-  if (_length > 0) {
-    size += (_length-1)*sizeof(Entry);
+  if (_capacity > 0) {
+    size += (_capacity-1)*sizeof(Entry);
   }
 
   DEALLOC_KNOWN(this, size,"FlatTerm");
@@ -99,9 +99,23 @@ static const size_t ENTRIES_PER_COPY_BEAT = 6144;
 
 FlatTerm* FlatTerm::create(TermList t)
 {
+  return create(t, nullptr);
+}
+
+FlatTerm* FlatTerm::create(TermList t, FlatTerm* reuse)
+{
   size_t entries = t.isVar() ? 1 : getEntryCount</*mightBeLiteral=*/true>(t.term());
   Timer::beat(entries / ENTRIES_PER_CREATE_BEAT);
-  auto res = new(entries) FlatTerm(entries);
+  FlatTerm* res;
+  if (reuse && reuse->_capacity >= entries) {
+    res = reuse;
+    res->_length = entries;
+  } else {
+    if (reuse) {
+      reuse->destroy();
+    }
+    res = new(entries) FlatTerm(entries);
+  }
 
   size_t pos = 0;
   pushTerm</*mightBeLiteral=*/true>(res->_data, pos, TermList(t));
@@ -131,9 +145,23 @@ FlatTerm* FlatTerm::create(TermStack ts)
 
 FlatTerm* FlatTerm::copy(const FlatTerm* ft)
 {
+  return copy(ft, nullptr);
+}
+
+FlatTerm* FlatTerm::copy(const FlatTerm* ft, FlatTerm* reuse)
+{
   size_t entries=ft->_length;
   Timer::beat(entries / ENTRIES_PER_COPY_BEAT);
-  FlatTerm* res=new(entries) FlatTerm(entries);
+  FlatTerm* res;
+  if (reuse && reuse->_capacity >= entries) {
+    res = reuse;
+    res->_length = entries;
+  } else {
+    if (reuse) {
+      reuse->destroy();
+    }
+    res = new(entries) FlatTerm(entries);
+  }
   memcpy(res->_data, ft->_data, entries*sizeof(Entry));
   return res;
 }

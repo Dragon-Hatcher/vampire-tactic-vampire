@@ -58,11 +58,12 @@ public:
   struct LitInfo
   {
     LitInfo() {}
-    LitInfo(Clause* cl, unsigned litIndex);
+    /** @b reuse, if not null, is a flat term to make this one in (`FlatTerm::create`). */
+    LitInfo(Clause* cl, unsigned litIndex, FlatTerm* reuse = nullptr);
     void dispose();
 
-    static LitInfo getReversed(const LitInfo& li);
-    static LitInfo getOpposite(const LitInfo& li);
+    static LitInfo getReversed(const LitInfo& li, FlatTerm* reuse = nullptr);
+    static LitInfo getOpposite(const LitInfo& li, FlatTerm* reuse = nullptr);
 
     /** Index of this LitInfo in the ClauseMatcher object */
     unsigned liIndex;

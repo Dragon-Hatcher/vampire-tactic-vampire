@@ -123,10 +123,43 @@ public:
       op = entry;
     }
 
+    /**
+     * The flat term the last query was made in, for the next to be made in
+     * (`FlatTerm::create`): a matcher is recycled from one query to the next,
+     * and allocating a flat term for each cost as much as many a match.
+     */
+    FlatTerm* spare() {
+      FlatTerm* s = _spare;
+      _spare = nullptr;
+      return s;
+    }
+
     void reset() {
-      ft->destroy();
+      // A large one is not kept, so that one large query does not hold its
+      // room for as long as the matcher is recycled.
+      if (ft->capacity() <= MAX_SPARE_ENTRIES) {
+        if (_spare) {
+          _spare->destroy();
+        }
+        _spare = ft;
+      } else {
+        ft->destroy();
+      }
       ft = nullptr;
     }
+
+    Matcher() = default;
+    Matcher(const Matcher&) = delete;
+    Matcher& operator=(const Matcher&) = delete;
+    ~Matcher() {
+      if (_spare) {
+        _spare->destroy();
+      }
+    }
+
+  private:
+    static constexpr size_t MAX_SPARE_ENTRIES = 1024;
+    FlatTerm* _spare = nullptr;
   };
 
 };
