@@ -75,7 +75,16 @@ public:
      * If @b tag()==FUN_UNEXPANDED, it fills out entries for the functions
      * arguments with FUN_UNEXPANDED values. Otherwise does nothing.
      */
-    void expand();
+    /**
+     * Fills in a function's arguments, if they are not yet. Inline, as the
+     * matcher asks it of every function it checks and most already are.
+     */
+    void expand() {
+      if (_tag() != FUN) {
+        expandUnexpanded();
+      }
+    }
+    void expandUnexpanded();
 
     uint64_t _content;
     BITFIELD(64,
@@ -103,6 +112,8 @@ public:
   { _data[0]._setNumber(_data[0]._number()^1); _data[1]._setTerm(Literal::complementaryLiteral(static_cast<Literal*>(_data[1]._term()))); }
 
 private:
+  static void copyWritten(Entry* dst, const Entry* src, size_t len);
+
   template<bool mightBeLiteral>
   static size_t getEntryCount(Term* t);
 

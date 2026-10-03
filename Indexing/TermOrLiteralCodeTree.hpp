@@ -135,8 +135,9 @@ public:
     }
 
     void reset() {
-      // A large one is not kept, so that one large query does not hold its
-      // room for as long as the matcher is recycled.
+      // A very large one is not kept, so that one query does not hold its
+      // room for as long as the matcher is recycled; a large one is, as
+      // allocating and freeing one costs most.
       if (ft->capacity() <= MAX_SPARE_ENTRIES) {
         if (_spare) {
           _spare->destroy();
@@ -158,7 +159,7 @@ public:
     }
 
   private:
-    static constexpr size_t MAX_SPARE_ENTRIES = 1024;
+    static constexpr size_t MAX_SPARE_ENTRIES = 1 << 16;
     FlatTerm* _spare = nullptr;
   };
 
