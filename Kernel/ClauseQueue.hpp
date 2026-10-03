@@ -17,6 +17,8 @@
 #ifndef __ClauseQueue__
 #define __ClauseQueue__
 
+#include <cstdint>
+
 #if VDEBUG
 #include <ostream>
 #endif
@@ -50,11 +52,17 @@ public:
 
   friend class Iterator;
 protected:
-  /** comparison of clauses */
-  virtual bool lessThan(Clause*,Clause*) = 0;
+  /** The leading part of the sort key of a clause; must not change
+   * while the clause is in the queue */
+  virtual uint64_t key(Clause*) = 0;
+  /** Comparison of two clauses with equal keys */
+  static bool tieLessThan(Clause* c1, Clause* c2);
   /** Nodes in the skip list */
   class Node {
   public:
+    /** sort key of the clause, kept here so that searching the list
+     * does not need to visit the clauses */
+    uint64_t key;
     /** Clause at this node */
     Clause* clause;
     /** Links to other nodes on the right, can be of any length */
@@ -64,6 +72,9 @@ protected:
   unsigned _height;
   /** the leftmost node with the dummy key and value */
   Node* _left;
+  /** true if the clause with key @b k goes before @b node */
+  static bool lessThan(uint64_t k, Clause* c, const Node* node)
+  { return k < node->key || (k == node->key && tieLessThan(c, node->clause)); }
 
 public:
   /** Iterator over the queue
