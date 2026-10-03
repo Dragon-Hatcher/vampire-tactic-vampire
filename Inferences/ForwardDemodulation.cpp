@@ -100,6 +100,17 @@ bool ForwardDemodulation<higherOrder>::perform(Clause* cl, Clause*& replacement,
 
       bool redundancyCheck = _helper.redundancyCheckNeededForPremise(cl, lit, trm);
 
+      // A term found to have no demodulator rewriting it keeps none until one
+      // that could is inserted. Found so only where nothing but the term and
+      // the demodulators decides: not where the clause's colour or the
+      // redundancy of the premise rules some out, nor under randomization.
+      Term* t = trm.term();
+      ASS(t->shared());
+      if (_index->noInsertionSince(t->functor(), t->irreducibleAt())) {
+        continue;
+      }
+      bool stampable = !rsi && !redundancyCheck && cl->color() == COLOR_TRANSPARENT;
+
       auto git = _index->getGeneralizations(trm.term());
       while(git.hasNext()) {
         auto qr=git.next();
@@ -180,6 +191,9 @@ bool ForwardDemodulation<higherOrder>::perform(Clause* cl, Clause*& replacement,
         // (`InferenceStore::recordDemodulation`), as most never reach a proof.
         InferenceStore::instance()->recordDemodulation(replacement, lit, trm, rhsS);
         return true;
+      }
+      if (stampable) {
+        t->setIrreducibleAt(DemodulationLHSIndex::clock());
       }
     }
   }

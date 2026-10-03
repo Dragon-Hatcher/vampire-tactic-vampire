@@ -731,6 +731,10 @@ public:
     _maxRedLen = rl;
   } // setWeight
 
+  /** see _irreducibleAt */
+  unsigned irreducibleAt() const { return _irreducibleAt; }
+  void setIrreducibleAt(unsigned clock) { _irreducibleAt = clock; }
+
   /** Set the number of variable _occurrences_ */
   void setNumVarOccs(unsigned v)
   {
@@ -972,6 +976,10 @@ protected:
 #endif
   /** length of maximum reduction length */
   int _maxRedLen;
+  /** The clock of the demodulator index (DemodulationLHSIndex::clock) when
+   * forward demodulation last found no demodulator to rewrite this term, 0
+   * if never. In what would be padding otherwise. */
+  unsigned _irreducibleAt;
   union {
     /** If _isTwoVarEquality is false, this value is valid and contains
      * number of occurrences of variables */

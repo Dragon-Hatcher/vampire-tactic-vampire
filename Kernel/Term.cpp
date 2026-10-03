@@ -1675,6 +1675,7 @@ Term::Term(const Term& t) throw()
 #if VDEBUG
     _kboInstance(nullptr),
 #endif
+    _irreducibleAt(0),
     _vars(0)
 {
   ASS(!isSpecial()); //we do not copy special terms
@@ -1710,6 +1711,7 @@ Term::Term() throw()
    _kboInstance(nullptr),
 #endif
    _maxRedLen(0),
+   _irreducibleAt(0),
    _vars(0)
 {
   _args[0].setContent(0);
