@@ -345,6 +345,12 @@ Term* SubstHelper::applyImpl(Term* trm, Applicator& applicator, bool noSharing)
     ASSERTION_VIOLATION;
   }
 
+  // A shared ground term comes back as it is, as such subterms do below:
+  // sorts are mostly that, and every result sort is computed by this.
+  if(trm->shared() && trm->ground()) {
+    return trm;
+  }
+
   // The stacks this works in, one set for each depth it is entered at -- an
   // applicator can apply a substitution itself -- kept from one call to the
   // next: this runs for every substitution applied, and on small terms taking
