@@ -92,6 +92,13 @@ public:
   inline const Entry& operator[](size_t i) const { ASS_L(i,_length); return _data[i]; }
 
   void swapCommutativePredicateArguments();
+  /**
+   * The polarity of the literal this is flipped in its header alone: its
+   * term entry still points to the literal of the other polarity, which only
+   * a ground term check reads (`CodeTree::LitInfo::getOpposite`).
+   */
+  void flipPolarity()
+  { _data[0]._setNumber(_data[0]._number()^1); }
   void changeLiteralPolarity()
   { _data[0]._setNumber(_data[0]._number()^1); _data[1]._setTerm(Literal::complementaryLiteral(static_cast<Literal*>(_data[1]._term()))); }
 
