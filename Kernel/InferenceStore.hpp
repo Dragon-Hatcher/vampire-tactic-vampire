@@ -149,17 +149,13 @@ public:
     Packed() = default;
     explicit Packed(const Stack<T>& from) : _size(from.size())
     {
-      if (_size) {
-        _data = new T[_size];
-        for (unsigned i = 0; i < _size; i++) _data[i] = from[i];
-      }
+      _data = allocate(_size);
+      for (unsigned i = 0; i < _size; i++) ::new (&_data[i]) T(from[i]);
     }
     Packed(const Packed& other) : _size(other._size)
     {
-      if (_size) {
-        _data = new T[_size];
-        for (unsigned i = 0; i < _size; i++) _data[i] = other._data[i];
-      }
+      _data = allocate(_size);
+      for (unsigned i = 0; i < _size; i++) ::new (&_data[i]) T(other._data[i]);
     }
     Packed(Packed&& other) noexcept : _data(other._data), _size(other._size)
     {
@@ -172,15 +168,15 @@ public:
       std::swap(_size, other._size);
       return *this;
     }
-    ~Packed() { delete[] _data; }
+    ~Packed() { release(_data, _size); }
 
     /** One more, at the end: a reallocation, as these rarely grow past one. */
     void push(T x)
     {
-      T* grown = new T[_size + 1];
-      for (unsigned i = 0; i < _size; i++) grown[i] = std::move(_data[i]);
-      grown[_size] = std::move(x);
-      delete[] _data;
+      T* grown = allocate(_size + 1);
+      for (unsigned i = 0; i < _size; i++) ::new (&grown[i]) T(std::move(_data[i]));
+      ::new (&grown[_size]) T(std::move(x));
+      release(_data, _size);
       _data = grown;
       _size++;
     }
@@ -195,6 +191,17 @@ public:
     const T* end() const { return _data + _size; }
 
   private:
+    // From vampire's own allocator, which keeps the small ones -- most lists
+    // of bindings -- on free lists of their size.
+    static T* allocate(unsigned n)
+    { return n ? static_cast<T*>(Lib::alloc(n * sizeof(T), alignof(T))) : nullptr; }
+    static void release(T* data, unsigned n)
+    {
+      if (!data) return;
+      for (unsigned i = 0; i < n; i++) data[i].~T();
+      Lib::free(data, n * sizeof(T), alignof(T));
+    }
+
     T* _data = nullptr;
     unsigned _size = 0;
   };
@@ -713,6 +720,8 @@ private:
  * (`Unit::records`).
  */
 struct UnitRecords {
+  USE_ALLOCATOR(UnitRecords);
+
   InferenceStore::Uses uses;
   /**
    * A forward demodulation not yet worked out into uses
