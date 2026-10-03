@@ -105,10 +105,15 @@ TermList SortHelper::getResultSort(const Term* t)
     return TermList(AtomicSort::superSort());
   }
 
-  Substitution subst;
-  bool shared = getTypeSub(t, subst);
   Signature::Symbol* sym = env.signature->getFunction(t->functor());
   TermList result = sym->type()->result();
+  // without type arguments there is nothing to substitute
+  if(sym->type()->numTypeArguments() == 0) {
+    return result;
+  }
+
+  Substitution subst;
+  bool shared = getTypeSub(t, subst);
 
   // If the substitution is empty, then the result sort must be necessarily ground.
   ASS(
