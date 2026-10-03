@@ -80,6 +80,8 @@ private:
   template<class Fn>
   Evaluator* getEvaluator(unsigned func, DArray<Evaluator*>& evaluators, Fn canEval);
   const bool _normalize;
+  /** This evaluator, among all made, for Literal::evaluatedUnchangedBy */
+  const unsigned _id;
 };
 
 }

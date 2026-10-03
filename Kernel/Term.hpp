@@ -976,9 +976,10 @@ protected:
 #endif
   /** length of maximum reduction length */
   int _maxRedLen;
-  /** The clock of the demodulator index (DemodulationLHSIndex::clock) when
-   * forward demodulation last found no demodulator to rewrite this term, 0
-   * if never. In what would be padding otherwise. */
+  /** In what would be padding otherwise, 0 until set. For a term, the clock
+   * of the demodulator index (DemodulationLHSIndex::clock) when forward
+   * demodulation last found no demodulator to rewrite it; for a literal, the
+   * InterpretedLiteralEvaluator that last evaluated it to itself. */
   unsigned _irreducibleAt;
   union {
     /** If _isTwoVarEquality is false, this value is valid and contains
@@ -1086,6 +1087,11 @@ class Literal
   : public Term
 {
 public:
+  /** the InterpretedLiteralEvaluator that last evaluated this literal to
+   * itself, 0 if none (see Term::_irreducibleAt) */
+  unsigned evaluatedUnchangedBy() const { return _irreducibleAt; }
+  void setEvaluatedUnchangedBy(unsigned evaluator) { _irreducibleAt = evaluator; }
+
   /** True if equality literal */
   bool isEquality() const
   { return functor() == 0; }

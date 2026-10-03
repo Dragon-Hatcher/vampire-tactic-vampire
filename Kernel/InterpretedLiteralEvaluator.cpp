@@ -984,7 +984,8 @@ IMPL_OPERATOR(Theory::REAL_PLUS, RealConstantType, RealConstantType(RationalCons
 //
 // This is where the evaluators defined above are used.
 
-InterpretedLiteralEvaluator::InterpretedLiteralEvaluator(bool doNormalize) : _normalize(doNormalize)
+InterpretedLiteralEvaluator::InterpretedLiteralEvaluator(bool doNormalize)
+  : _normalize(doNormalize), _id([]() { static unsigned made = 0; return ++made; }())
 {
   // For an evaluator to be used it must be pushed onto _evals
   // We search this list, calling canEvaluate on each evaluator
@@ -1410,6 +1411,15 @@ bool InterpretedLiteralEvaluator::evaluate(Literal* lit, bool& isConstant, Liter
 
   // This tries to transform each subterm using tryEvaluateFunc (see transform Subterm below)
 
+  // What a literal evaluates to depends on nothing but it and this
+  // evaluator's settings, and each clause's literals are evaluated: one found
+  // to evaluate to itself is not evaluated again.
+  if (lit->evaluatedUnchangedBy() == _id) {
+    isConstant = false;
+    resLit = lit;
+    return false;
+  }
+
   resLit = _normalize ? LiteralNormalizer::normalize(lit)
                       : lit;
   DEBUG( "\t0 ==> ", resLit->toString() );
@@ -1444,6 +1454,9 @@ bool InterpretedLiteralEvaluator::evaluate(Literal* lit, bool& isConstant, Liter
   isConstant = false;
   auto out = resLit != lit;
   DEBUG( "\t3 ==> ", resLit->toString(), "(did evaluate: ", out, ")" );
+  if (!out) {
+    lit->setEvaluatedUnchangedBy(_id);
+  }
   return out;
 }
 
