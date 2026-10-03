@@ -31,6 +31,8 @@ using namespace Lib;
  * Class to represent units of inference (such as clauses and formulas).
  * @since 08/05/2007 Manchester
  */
+struct UnitRecords;
+
 class Unit
 {
 protected:
@@ -60,6 +62,8 @@ public:
 
   /** Return the number of this unit */
   unsigned number() const { return _number; }
+  UnitRecords* records() const { return _records; }
+  void setRecords(UnitRecords* records) { _records = records; }
   /** Forcefully change the unit's number - use with care! - numbers should be unique across the whole board! */
   void overwriteNumber(unsigned newNumber) { _number = newNumber; }
 
@@ -159,6 +163,13 @@ protected:
 
   /** used in interpolation to denote parents of what color have been used */
   unsigned _inheritedColor : 2;
+
+  /**
+   * What `InferenceStore` recorded of how this unit was inferred, null if
+   * nothing: kept on the unit rather than in a table by its number, as nearly
+   * every clause made has some, and most are kept to the end.
+   */
+  UnitRecords* _records = nullptr;
 
   Unit(Kind kind, Inference inf);
 

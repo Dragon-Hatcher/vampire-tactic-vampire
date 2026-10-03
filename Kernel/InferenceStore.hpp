@@ -139,6 +139,69 @@ public:
    * records it instead.
    */
   /**
+   * A list held in no more room than it takes, a pointer and a length: what
+   * the records keep where a stack would keep room to grow. Every clause made
+   * keeps its records to the end, and most hold one or two of anything.
+   */
+  template<class T>
+  class Packed {
+  public:
+    Packed() = default;
+    explicit Packed(const Stack<T>& from) : _size(from.size())
+    {
+      if (_size) {
+        _data = new T[_size];
+        for (unsigned i = 0; i < _size; i++) _data[i] = from[i];
+      }
+    }
+    Packed(const Packed& other) : _size(other._size)
+    {
+      if (_size) {
+        _data = new T[_size];
+        for (unsigned i = 0; i < _size; i++) _data[i] = other._data[i];
+      }
+    }
+    Packed(Packed&& other) noexcept : _data(other._data), _size(other._size)
+    {
+      other._data = nullptr;
+      other._size = 0;
+    }
+    Packed& operator=(Packed other) noexcept
+    {
+      std::swap(_data, other._data);
+      std::swap(_size, other._size);
+      return *this;
+    }
+    ~Packed() { delete[] _data; }
+
+    /** One more, at the end: a reallocation, as these rarely grow past one. */
+    void push(T x)
+    {
+      T* grown = new T[_size + 1];
+      for (unsigned i = 0; i < _size; i++) grown[i] = std::move(_data[i]);
+      grown[_size] = std::move(x);
+      delete[] _data;
+      _data = grown;
+      _size++;
+    }
+
+    unsigned size() const { return _size; }
+    bool isEmpty() const { return _size == 0; }
+    T& operator[](unsigned i) { return _data[i]; }
+    const T& operator[](unsigned i) const { return _data[i]; }
+    T* begin() { return _data; }
+    T* end() { return _data + _size; }
+    const T* begin() const { return _data; }
+    const T* end() const { return _data + _size; }
+
+  private:
+    T* _data = nullptr;
+    unsigned _size = 0;
+  };
+
+  using Bindings = Packed<std::pair<unsigned, TermList>>;
+
+  /**
    * A literal of a premise the inference rewrote -- after substituting into
    * it, where it substituted -- rather than only substituted into, and what
    * it became. An equation is shared with its sides either way round, so
@@ -149,10 +212,23 @@ public:
     Literal* from;
     Literal* to;
     bool turned;
+    /**
+     * Until `turned` is worked out (`recordRewrittenAt`): what the inference
+     * rewrote into what, once the premise was substituted into. Empty after.
+     */
+    TermList rewrote = TermList::empty();
+    TermList into = TermList::empty();
   };
 
   struct PremiseUse {
     unsigned premise;
+    /**
+     * `rewritesWholePremise` (1), VIRAS's virtual term (2, 4, 8), and
+     * `negatedFlag`, or zero.
+     */
+    unsigned flags;
+    /** The premise states `term` negated: `j s + u` of a negative coefficient. */
+    static const unsigned negatedFlag = 16;
     /**
      * The literal acted on, and the clause it is one of -- the premise itself,
      * unless the inference says otherwise -- or null if none was.
@@ -173,14 +249,7 @@ public:
      * the equation doing the rewriting in the premise it comes from.
      */
     TermList term;
-    /**
-     * `rewritesWholePremise` (1), VIRAS's virtual term (2, 4, 8), and
-     * `negatedFlag`, or zero.
-     */
-    unsigned flags;
-    /** The premise states `term` negated: `j s + u` of a negative coefficient. */
-    static const unsigned negatedFlag = 16;
-    Stack<std::pair<unsigned, TermList>> bindings;
+    Bindings bindings;
     /**
      * A second term of the premise the inference acted on, empty if it acted
      * on one: what an arithmetic equation `k s + t = 0` rewrote `s` to,
@@ -197,8 +266,10 @@ public:
      */
     TermList factor = TermList::empty();
     /** The premise's literals the inference rewrote, `recordRewritten`. */
-    Stack<RewrittenLiteral> rewritten = Stack<RewrittenLiteral>();
+    Packed<RewrittenLiteral> rewritten;
   };
+
+  using Uses = Packed<PremiseUse>;
 
   /**
    * The inference rewrote the term it acted on throughout the premise, rather
@@ -238,6 +309,13 @@ public:
     TermList term, unsigned flags, const Substitution& subst);
 
   /**
+   * The variables of @b c, in the order collecting them into a set gives:
+   * worked out once per clause, as a premise of many inferences is asked for
+   * them by each. A clause's literals never change, so neither do they.
+   */
+  const Stack<unsigned>& variablesOf(Clause* c);
+
+  /**
    * What a unifier @b subs makes of @b premise's variables in @b bank: the
    * substitution the inference took the premise at, for `recordPremiseUse`.
    */
@@ -245,9 +323,7 @@ public:
   static S bankSubstitution(Premise* premise, Subs&& subs, unsigned bank)
   {
     S s;
-    DHSet<unsigned, FnvHash, IdentityHash> vars;
-    premise->collectVars(vars);
-    for (unsigned v : iterTraits(vars.iterator()))
+    for (unsigned v : iterTraits(InferenceStore::instance()->variablesOf(premise).iter()))
       s.bindUnbound(v, subs.apply(TermList(v, false), bank));
     return s;
   }
@@ -271,6 +347,16 @@ public:
     TermList rewrittenLhs);
 
   /**
+   * `recordRewritten`, for an inference that substituted into @b premise
+   * what the last use of it recorded binds, then rewrote @b rewrote into
+   * @b into: what the literal's first argument became is worked out from
+   * those, and only when the use is read (`premiseUses`), as most clauses
+   * never are.
+   */
+  void recordRewrittenAt(Unit* generated, Unit* premise, Literal* from,
+    Literal* to, TermList rewrote, TermList into);
+
+  /**
    * The second term, @b other, the last use of @b premise recorded for
    * @b generated acted on: a term of the premise's own variables, which the
    * use's bindings instantiate.
@@ -287,7 +373,23 @@ public:
   void recordFactor(Unit* generated, Unit* premise, TermList factor);
 
   /** How @b u used each of its premises, empty when nothing was recorded. */
-  const Stack<PremiseUse>* premiseUses(Unit* u) const;
+  const Uses* premiseUses(Unit* u) const;
+
+  /**
+   * A forward demodulation of @b lit, its subterm @b term made @b result by a
+   * unit equation: the clause it rewrote and the equation are @b generated's
+   * two premises, in that order.
+   *
+   * Kept as just that, and worked out into the uses it made of its two
+   * premises -- which side of the demodulator, at what match -- the first
+   * time they are asked for (`premiseUses`). Demodulation is the commonest
+   * inference there is, and most of what it makes never reaches a proof: the
+   * work is done only for what does. Everything stays good until then: the
+   * premises are held by @b generated's inference, and literals and terms are
+   * shared, never freed.
+   */
+  void recordDemodulation(Unit* generated, Literal* lit, TermList term,
+    TermList result);
 
   /**
    * Which of a generated clause's literals are the unification constraints an
@@ -592,10 +694,36 @@ private:
   // split name -> the definition that introduced it
   std::unordered_map<std::string, Unit*> _splitDefinitions;
 
-  // generated unit id -> how it used each premise
-  DHMap<unsigned,Stack<PremiseUse>, FnvHash, IdentityHash> _premiseUses;
+  // clause id -> its variables (`variablesOf`); a pointer, as what it points
+  // to is iterated over while the map can grow
+  DHMap<unsigned, Stack<unsigned>*, FnvHash, IdentityHash> _variables;
+
+  /** @b u's records, made if it has none yet. */
+  static UnitRecords& recordsOf(Unit* u);
+  /** The premise uses of @b u's demodulation, if it has one not yet worked out. */
+  void workOutDemodulation(Unit* u);
+  /** The `turned` of each `recordRewrittenAt` of @b u not yet worked out. */
+  void workOutRewrittenAt(Unit* u);
   DHMap<unsigned, Stack<Literal*>, FnvHash, IdentityHash> _constraints;
   DHMap<unsigned, LiteralRewriting, FnvHash, IdentityHash> _literalImages;
+};
+
+/**
+ * What `InferenceStore` keeps of one unit, which the unit points to
+ * (`Unit::records`).
+ */
+struct UnitRecords {
+  InferenceStore::Uses uses;
+  /**
+   * A forward demodulation not yet worked out into uses
+   * (`InferenceStore::recordDemodulation`): the literal, the subterm of it
+   * rewritten, and what that became. Null when there is none.
+   */
+  Literal* demodulated = nullptr;
+  TermList demodulatedTerm = TermList::empty();
+  TermList demodulationResult = TermList::empty();
+  /** Whether a `recordRewrittenAt` is not yet worked out. */
+  bool rewrittenAt = false;
 };
 
 };

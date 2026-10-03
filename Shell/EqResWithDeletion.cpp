@@ -116,9 +116,7 @@ start_applying:
     // the conclusion is the rest of the premise at that binding, so neither is
     // recoverable from it.
     Substitution subst;
-    DHSet<unsigned, FnvHash, IdentityHash> vars;
-    premise->collectVars(vars);
-    for (unsigned v : iterTraits(vars.iterator())) {
+    for (unsigned v : iterTraits(InferenceStore::instance()->variablesOf(premise).iter())) {
       subst.bindUnbound(v, apply(v));
     }
     InferenceStore::instance()->recordPremiseUse(cl, premise, resolvedLit,

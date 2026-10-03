@@ -77,9 +77,7 @@ static void composeInto(Substitution& s, ResultSubstitution* u, bool bank)
 static void identityOn(Substitution& s, Clause* cl)
 {
   s.reset();
-  DHSet<unsigned, FnvHash, IdentityHash> vars;
-  cl->collectVars(vars);
-  for (unsigned v : iterTraits(vars.iterator())) {
+  for (unsigned v : iterTraits(InferenceStore::instance()->variablesOf(cl).iter())) {
     s.bindUnbound(v, TermList(v, false));
   }
 }

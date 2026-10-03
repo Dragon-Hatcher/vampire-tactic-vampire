@@ -513,22 +513,18 @@ Clause* Superposition<higherOrder>::performSuperposition(
   {
     auto record = [&](Clause* premise, Literal* on, TermList term,
                       bool isResult, unsigned flags) {
-      Substitution s;
-      DHSet<unsigned, FnvHash, IdentityHash> vars;
-      premise->collectVars(vars);
-      for (unsigned v : iterTraits(vars.iterator())) {
-        s.bindUnbound(v, subst->apply(TermList(v, false), isResult));
+      Stack<std::pair<unsigned, TermList>> bindings;
+      for (unsigned v : iterTraits(InferenceStore::instance()->variablesOf(premise).iter())) {
+        bindings.push({v, subst->apply(TermList(v, false), isResult)});
       }
       InferenceStore::instance()->recordPremiseUse(clause, premise, on, term,
-        flags, s);
+        flags, bindings);
     };
     record(rwClause, rwLit, rwTerm, !eqIsResult,
       doSimS ? InferenceStore::rewritesWholePremise : 0);
     auto rewritten = [&](Literal* from, Literal* to) {
-      TermList lhs = from->isEquality()
-        ? EqHelper::replace(subst->apply(from->termArg(0), !eqIsResult), rwTermS, tgtTermS)
-        : TermList::empty();
-      InferenceStore::instance()->recordRewritten(clause, rwClause, from, to, lhs);
+      InferenceStore::instance()->recordRewrittenAt(clause, rwClause, from, to,
+        rwTermS, tgtTermS);
     };
     rewritten(rwLit, tgtLitS);
     for (auto [from, to] : iterTraits(alsoRewritten.iter())) {

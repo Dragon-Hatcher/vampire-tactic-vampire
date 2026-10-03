@@ -57,9 +57,7 @@ static void recordUse(Clause* res, Clause* premise, Literal* removed, Unifier& u
     }
   } readBack{&back, &fresh};
   Stack<std::pair<unsigned, TermList>> bindings;
-  DHSet<unsigned, FnvHash, IdentityHash> vars;
-  premise->collectVars(vars);
-  for (unsigned v : iterTraits(vars.iterator()))
+  for (unsigned v : iterTraits(InferenceStore::instance()->variablesOf(premise).iter()))
     bindings.push({v, SubstHelper::apply(unifier.apply(v), readBack)});
   InferenceStore::instance()->recordPremiseUse(res, premise, removed, TermList::empty(), 0,
     bindings);

@@ -42,6 +42,8 @@
 #include "SortHelper.hpp"
 
 #include "InferenceStore.hpp"
+#include "Kernel/EqHelper.hpp"
+#include "Kernel/Matcher.hpp"
 #include "Kernel/SubstHelper.hpp"
 #include "Term.hpp"
 #include "TermIterators.hpp"
@@ -122,28 +124,23 @@ void InferenceStore::recordPremiseUse(Unit* generated, Unit* premise,
   TermList term, unsigned flags,
   const Stack<std::pair<unsigned, TermList>>& bindings)
 {
-  Stack<PremiseUse>* uses;
-  _premiseUses.getValuePtr(generated->number(), uses);
-  uses->push({premise->number(), nullptr, nullptr, term, flags, bindings});
+  recordsOf(generated).uses.push(
+    {premise->number(), flags, nullptr, nullptr, term, Bindings(bindings)});
 }
 
 void InferenceStore::recordPremiseUse(Unit* generated, Clause* premise,
   Literal* on, TermList term, unsigned flags,
   const Stack<std::pair<unsigned, TermList>>& bindings, Clause* in)
 {
-  Stack<PremiseUse>* uses;
-  _premiseUses.getValuePtr(generated->number(), uses);
-  uses->push({premise->number(), on ? (in ? in : premise) : nullptr, on, term,
-    flags, bindings});
+  recordsOf(generated).uses.push({premise->number(), flags,
+    on ? (in ? in : premise) : nullptr, on, term, Bindings(bindings)});
 }
 
 void InferenceStore::recordPremiseUse(Unit* generated, Clause* premise,
   Literal* on, TermList term, unsigned flags, const Substitution& subst)
 {
   Stack<std::pair<unsigned, TermList>> bindings;
-  DHSet<unsigned, FnvHash, IdentityHash> vars;
-  premise->collectVars(vars);
-  for (unsigned v : iterTraits(vars.iterator())) {
+  for (unsigned v : iterTraits(InferenceStore::instance()->variablesOf(premise).iter())) {
     bindings.push({v, subst.apply(v)});
   }
   recordPremiseUse(generated, premise, on, term, flags, bindings);
@@ -207,7 +204,7 @@ void InferenceStore::recoverSubsumptionResolutionUses(Unit* u)
 void InferenceStore::recordRewritten(Unit* generated, Unit* premise, Literal* from,
   Literal* to, TermList rewrittenLhs)
 {
-  Stack<PremiseUse>* uses = _premiseUses.findPtr(generated->number());
+  Uses* uses = generated->records() ? &generated->records()->uses : nullptr;
   ASS(uses);
   for (unsigned i = uses->size(); i-- > 0;) {
     PremiseUse& use = (*uses)[i];
@@ -220,9 +217,50 @@ void InferenceStore::recordRewritten(Unit* generated, Unit* premise, Literal* fr
   ASSERTION_VIOLATION;
 }
 
+void InferenceStore::recordRewrittenAt(Unit* generated, Unit* premise,
+  Literal* from, Literal* to, TermList rewrote, TermList into)
+{
+  auto& rewritten = lastUse(generated, premise).rewritten;
+  if (!from->isEquality()) {
+    // Only an equation can be turned round.
+    rewritten.push({from, to, false});
+    return;
+  }
+  rewritten.push({from, to, false, rewrote, into});
+  generated->records()->rewrittenAt = true;
+}
+
+void InferenceStore::workOutRewrittenAt(Unit* u)
+{
+  UnitRecords* records = u->records();
+  if (!records || !records->rewrittenAt) {
+    return;
+  }
+  records->rewrittenAt = false;
+  for (PremiseUse& use : records->uses) {
+    Substitution subst;
+    bool substituted = false;
+    for (RewrittenLiteral& r : use.rewritten) {
+      if (r.rewrote.isEmpty()) {
+        continue;
+      }
+      if (!substituted) {
+        for (auto [var, term] : use.bindings) {
+          subst.bindUnbound(var, term);
+        }
+        substituted = true;
+      }
+      TermList lhs = EqHelper::replace(
+        SubstHelper::apply(r.from->termArg(0), subst), r.rewrote, r.into);
+      r.turned = *r.to->nthArgument(0) != lhs;
+      r.rewrote = r.into = TermList::empty();
+    }
+  }
+}
+
 InferenceStore::PremiseUse& InferenceStore::lastUse(Unit* generated, Unit* premise)
 {
-  Stack<PremiseUse>* uses = _premiseUses.findPtr(generated->number());
+  Uses* uses = generated->records() ? &generated->records()->uses : nullptr;
   ASS(uses);
   for (unsigned i = uses->size(); i-- > 0;) {
     PremiseUse& use = (*uses)[i];
@@ -250,7 +288,12 @@ void InferenceStore::recordNegated(Unit* generated, Unit* premise)
 
 void InferenceStore::forget(Unit* u)
 {
-  _premiseUses.remove(u->number());
+  delete u->records();
+  u->setRecords(nullptr);
+  Stack<unsigned>* vars;
+  if (_variables.pop(u->number(), vars)) {
+    delete vars;
+  }
   _constraints.remove(u->number());
   _literalImages.remove(u->number());
   _splittingNameLiterals.remove(u->number());
@@ -343,9 +386,89 @@ const Stack<Literal*>* InferenceStore::constraints(Unit* u) const
   return _constraints.findPtr(u->number());
 }
 
-const Stack<InferenceStore::PremiseUse>* InferenceStore::premiseUses(Unit* u) const
+const InferenceStore::Uses* InferenceStore::premiseUses(Unit* u) const
 {
-  return _premiseUses.findPtr(u->number());
+  // Working a deferred record out changes nothing a caller could see but that
+  // it is now there to read.
+  const_cast<InferenceStore*>(this)->workOutDemodulation(u);
+  const_cast<InferenceStore*>(this)->workOutRewrittenAt(u);
+  UnitRecords* records = u->records();
+  return records && !records->uses.isEmpty() ? &records->uses : nullptr;
+}
+
+const Stack<unsigned>& InferenceStore::variablesOf(Clause* c)
+{
+  Stack<unsigned>** found;
+  if (_variables.getValuePtr(c->number(), found)) {
+    DHSet<unsigned, FnvHash, IdentityHash> vars;
+    c->collectVars(vars);
+    *found = new Stack<unsigned>(vars.size());
+    for (unsigned v : iterTraits(vars.iterator())) {
+      (*found)->push(v);
+    }
+  }
+  return **found;
+}
+
+UnitRecords& InferenceStore::recordsOf(Unit* u)
+{
+  if (!u->records()) {
+    u->setRecords(new UnitRecords());
+  }
+  return *u->records();
+}
+
+void InferenceStore::recordDemodulation(Unit* generated, Literal* lit,
+  TermList term, TermList result)
+{
+  UnitRecords& records = recordsOf(generated);
+  records.demodulated = lit;
+  records.demodulatedTerm = term;
+  records.demodulationResult = result;
+}
+
+void InferenceStore::workOutDemodulation(Unit* u)
+{
+  UnitRecords* records = u->records();
+  if (!records || !records->demodulated) {
+    return;
+  }
+  Literal* lit = records->demodulated;
+  TermList term = records->demodulatedTerm;
+  TermList result = records->demodulationResult;
+  records->demodulated = nullptr;
+  Inference::Iterator it = u->inference().iterator();
+  Clause* rewritten = u->inference().next(it)->asClause();
+  Clause* demodulator = u->inference().next(it)->asClause();
+  // What the literal became, made again: literals are shared, so this is the
+  // one the inference made.
+  Literal* resLit = EqHelper::replace(lit, term, result);
+  // Which subterm of which literal was rewritten, by which side of the
+  // demodulator and at what match: none of it survives the inference, and
+  // working out afterwards which way a demodulator was used is guesswork.
+  //
+  // The index holds the demodulator with its variables normalised, so neither
+  // the side it matched nor the substitution is stated in the variables the
+  // clause itself has. Matching the clause's own equation against the
+  // rewritten term recovers both, and there is no search in it: at most one
+  // side can give the term the inference produced.
+  Literal* equation = (*demodulator)[0];
+  ASS(equation->isEquality() && equation->isPositive());
+  for (unsigned side = 0; side < 2; side++) {
+    Substitution subst;
+    if (!MatchingUtils::matchTerms(equation->termArg(side), term, subst)) {
+      continue;
+    }
+    if (SubstHelper::apply(equation->termArg(1 - side), subst) != result) {
+      continue;
+    }
+    recordPremiseUse(u, rewritten, lit, term, 0, Substitution());
+    recordRewritten(u, rewritten, lit, resLit,
+      lit->isEquality() ? EqHelper::replace(lit->termArg(0), term, result)
+                          : TermList::empty());
+    recordPremiseUse(u, demodulator, equation, equation->termArg(side), 0, subst);
+    return;
+  }
 }
 
 unsigned InferenceStore::newGenClauseState(GenClauseState state)

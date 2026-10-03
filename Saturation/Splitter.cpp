@@ -909,9 +909,7 @@ static void recordComponentRenaming(Unit* generated, Unit* definition,
     return;
   }
   Stack<std::pair<unsigned, TermList>> bindings;
-  DHSet<unsigned, FnvHash, IdentityHash> vars;
-  named->collectVars(vars);
-  for (unsigned v : iterTraits(vars.iterator())) {
+  for (unsigned v : iterTraits(InferenceStore::instance()->variablesOf(named).iter())) {
     bindings.push({v, renaming.apply(v)});
   }
   InferenceStore::instance()->recordPremiseUse(generated, definition,

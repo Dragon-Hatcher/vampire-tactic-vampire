@@ -132,9 +132,7 @@ Clause* Condensation::simplify(Clause* cl)
         // it is is the whole of what the step did.
         {
           Substitution s;
-          DHSet<unsigned, FnvHash, IdentityHash> vars;
-          cl->collectVars(vars);
-          for (unsigned v : iterTraits(vars.iterator()))
+          for (unsigned v : iterTraits(InferenceStore::instance()->variablesOf(cl).iter()))
             s.bindUnbound(v, subst->apply(TermList(v, false), 0));
           InferenceStore::instance()->recordPremiseUse(res, cl, nullptr,
             TermList::empty(), 0, s);

@@ -230,9 +230,7 @@ Clause* ExtensionalityResolution::performExtensionalityResolution(
   {
     auto record = [&](Clause* premise, Literal* on, unsigned bank) {
       Substitution s;
-      DHSet<unsigned, FnvHash, IdentityHash> vars;
-      premise->collectVars(vars);
-      for (unsigned v : iterTraits(vars.iterator())) {
+      for (unsigned v : iterTraits(InferenceStore::instance()->variablesOf(premise).iter())) {
         s.bindUnbound(v, subst->apply(TermList(v, false), bank));
       }
       InferenceStore::instance()->recordPremiseUse(res, premise, on,

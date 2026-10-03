@@ -225,9 +225,7 @@ Clause* BinaryResolution::generateClause(Clause* queryCl, Literal* queryLit, Cla
   {
     auto record = [cl](Clause* premise, Literal* on, auto apply) {
       Stack<std::pair<unsigned, TermList>> bindings;
-      DHSet<unsigned, FnvHash, IdentityHash> vars;
-      premise->collectVars(vars);
-      for (unsigned v : iterTraits(vars.iterator())) {
+      for (unsigned v : iterTraits(InferenceStore::instance()->variablesOf(premise).iter())) {
         bindings.push({v, apply(TermList(v, false))});
       }
       InferenceStore::instance()->recordPremiseUse(cl, premise, on,

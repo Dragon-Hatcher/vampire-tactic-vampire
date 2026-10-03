@@ -602,9 +602,7 @@ isRedundant:
               // its subsumption was found at.
               {
                 Substitution theta;
-                DHSet<unsigned, FnvHash, IdentityHash> mclVars;
-                mcl->collectVars(mclVars);
-                for (unsigned v : iterTraits(mclVars.iterator())) {
+                for (unsigned v : iterTraits(InferenceStore::instance()->variablesOf(mcl).iter())) {
                   TermList image = TermList(v, false);
                   if (binder.isBound(v)) {
                     image = binder.applyTo(TermList(v, false));

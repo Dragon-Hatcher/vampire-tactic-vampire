@@ -108,8 +108,7 @@ void Inference::destroy()
 }
 
 Inference::Inference(const NeedsMinimization& fsr) {
-  _siteFile = fsr.site.file_name();
-  _siteLine = fsr.site.line();
+  _site = fsr.site;
   initMany(fsr._rule,fsr._premises);
 
   ASS_REP(fsr._rule == InferenceRule::GLOBAL_SUBSUMPTION, ruleName(fsr._rule));
@@ -119,16 +118,14 @@ Inference::Inference(const NeedsMinimization& fsr) {
 }
 
 Inference::Inference(const InferenceOfASatClause& isc) {
-  _siteFile = isc.site.file_name();
-  _siteLine = isc.site.line();
+  _site = isc.site;
   initMany(isc.rule, isc.premises);
   _kind = Kind::SAT;
   _ptr2 = isc.clause;
 }
 
 Inference::Inference(const ComponentClauseInference& cci) {
-  _siteFile = cci.site.file_name();
-  _siteLine = cci.site.line();
+  _site = cci.site;
   initMany(cci.rule, cci.premises);
   _ptr2 = cci.causalParent;
 }
@@ -355,21 +352,18 @@ void Inference::initMany(InferenceRule r, UnitList* premises)
 }
 
 Inference::Inference(const FromInput& fi) {
-  _siteFile = fi.site.file_name();
-  _siteLine = fi.site.line();
+  _site = fi.site;
   init0(fi.inputType,InferenceRule::INPUT);
 }
 
 Inference::Inference(const TheoryAxiom& ta) {
-  _siteFile = ta.site.file_name();
-  _siteLine = ta.site.line();
+  _site = ta.site;
   init0(UnitInputType::AXIOM,ta.rule);
   ASS_REP(isTheoryAxiom(), ruleName(ta.rule));
 }
 
 Inference::Inference(const FormulaClauseTransformation& ft) {
-  _siteFile = ft.site.file_name();
-  _siteLine = ft.site.line();
+  _site = ft.site;
   init1(ft.rule,ft.premise);
 
   ASS_REP(isFormulaClauseTransformation(ft.rule),ruleName(ft.rule));
@@ -378,8 +372,7 @@ Inference::Inference(const FormulaClauseTransformation& ft) {
 }
 
 Inference::Inference(const FormulaClauseTransformationMany& ft) {
-  _siteFile = ft.site.file_name();
-  _siteLine = ft.site.line();
+  _site = ft.site;
   initMany(ft.rule,ft.premises);
 
   ASS_REP(isFormulaClauseTransformation(ft.rule),ruleName(ft.rule));
@@ -389,8 +382,7 @@ Inference::Inference(const FormulaClauseTransformationMany& ft) {
 }
 
 Inference::Inference(const GeneratingInference1& gi) {
-  _siteFile = gi.site.file_name();
-  _siteLine = gi.site.line();
+  _site = gi.site;
   init1(gi.rule,gi.premise);
 
   ASS_REP(isGeneratingInferenceRule(gi.rule),ruleName(gi.rule));
@@ -400,8 +392,7 @@ Inference::Inference(const GeneratingInference1& gi) {
 }
 
 Inference::Inference(const GeneratingInference2& gi) {
-  _siteFile = gi.site.file_name();
-  _siteLine = gi.site.line();
+  _site = gi.site;
   init2(gi.rule,gi.premise1,gi.premise2);
 
   ASS_REP(isGeneratingInferenceRule(gi.rule),ruleName(gi.rule));
@@ -412,8 +403,7 @@ Inference::Inference(const GeneratingInference2& gi) {
 }
 
 Inference::Inference(const GeneratingInferenceMany& gi) {
-  _siteFile = gi.site.file_name();
-  _siteLine = gi.site.line();
+  _site = gi.site;
   initMany(gi.rule,gi.premises);
 
   ASS_REP(isGeneratingInferenceRule(gi.rule),ruleName(gi.rule));
@@ -429,8 +419,7 @@ Inference::Inference(const GeneratingInferenceMany& gi) {
 }
 
 Inference::Inference(const SimplifyingInference1& si) {
-  _siteFile = si.site.file_name();
-  _siteLine = si.site.line();
+  _site = si.site;
   init1(si.rule,si.premise);
 
   ASS_REP(isSimplifyingInferenceRule(si.rule),ruleName(si.rule));
@@ -440,8 +429,7 @@ Inference::Inference(const SimplifyingInference1& si) {
 }
 
 Inference::Inference(const SimplifyingInference2& si) {
-  _siteFile = si.site.file_name();
-  _siteLine = si.site.line();
+  _site = si.site;
   init2(si.rule,si.premise1,si.premise2);
 
   ASS_REP(isSimplifyingInferenceRule(si.rule),ruleName(si.rule));
@@ -452,8 +440,7 @@ Inference::Inference(const SimplifyingInference2& si) {
 }
 
 Inference::Inference(const SimplifyingInferenceMany& si) {
-  _siteFile = si.site.file_name();
-  _siteLine = si.site.line();
+  _site = si.site;
   initMany(si.rule,si.premises);
 
   ASS_REP(isSimplifyingInferenceRule(si.rule),ruleName(si.rule));
@@ -464,32 +451,28 @@ Inference::Inference(const SimplifyingInferenceMany& si) {
 }
 
 Inference::Inference(const NonspecificInference0& gi) {
-  _siteFile = gi.site.file_name();
-  _siteLine = gi.site.line();
+  _site = gi.site;
   init0(gi.inputType,gi.rule);
 
   ASS_REP(isNonSpecificInferenceRule(gi.rule), ruleName(gi.rule));
 }
 
 Inference::Inference(const NonspecificInference1& gi) {
-  _siteFile = gi.site.file_name();
-  _siteLine = gi.site.line();
+  _site = gi.site;
   init1(gi.rule,gi.premise);
 
   ASS_REP(isNonSpecificInferenceRule(gi.rule), ruleName(gi.rule));
 }
 
 Inference::Inference(const NonspecificInference2& gi) {
-  _siteFile = gi.site.file_name();
-  _siteLine = gi.site.line();
+  _site = gi.site;
   init2(gi.rule,gi.premise1,gi.premise2);
 
   ASS_REP(isNonSpecificInferenceRule(gi.rule), ruleName(gi.rule));
 }
 
 Inference::Inference(const NonspecificInferenceMany& gi) {
-  _siteFile = gi.site.file_name();
-  _siteLine = gi.site.line();
+  _site = gi.site;
   initMany(gi.rule,gi.premises);
 
   ASS_REP(isNonSpecificInferenceRule(gi.rule), ruleName(gi.rule));

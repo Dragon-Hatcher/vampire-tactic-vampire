@@ -88,9 +88,7 @@ Clause* unifierToClause(Clause* cl, Literal* lit, AbstractingUnifier* unif, cons
   // clause does not keep, and the inequality it was resolved on.
   {
     Substitution subst;
-    DHSet<unsigned, FnvHash, IdentityHash> vars;
-    cl->collectVars(vars);
-    for (unsigned v : iterTraits(vars.iterator())) {
+    for (unsigned v : iterTraits(InferenceStore::instance()->variablesOf(cl).iter())) {
       subst.bindUnbound(v, unif->subs().apply(TermList(v, false), kVarBank));
     }
     InferenceStore::instance()->recordPremiseUse(res, cl, lit,

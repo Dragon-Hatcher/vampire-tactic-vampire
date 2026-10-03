@@ -22,9 +22,6 @@
 #include "Kernel/Clause.hpp"
 #include "Kernel/EqHelper.hpp"
 #include "Kernel/InferenceStore.hpp"
-#include "Kernel/Matcher.hpp"
-#include "Kernel/SubstHelper.hpp"
-#include "Kernel/Substitution.hpp"
 #include "Kernel/Inference.hpp"
 #include "Kernel/Ordering.hpp"
 #include "Kernel/Term.hpp"
@@ -178,37 +175,10 @@ bool ForwardDemodulation<higherOrder>::perform(Clause* cl, Clause*& replacement,
         replacement = Clause::fromStack(*resLits, SimplifyingInference2(InferenceRule::FORWARD_DEMODULATION, cl, qr.data->clause));
         if(env.options->proofExtra() == Options::ProofExtra::FULL)
           env.proofExtra.insert(replacement, new ForwardDemodulationExtra(lhs, trm));
-        // Which subterm of which literal was rewritten, by which side of the
-        // demodulator and at what match: none of it survives the inference, and
-        // working out afterwards which way a demodulator was used is guesswork.
-        //
-        // The index holds the demodulator with its variables normalised, so
-        // neither `lhs` nor the substitution behind `subs` is stated in the
-        // variables the clause itself has. Matching the clause's own equation
-        // against the rewritten term recovers both, and there is no search in
-        // it: at most one side can give the term the inference produced.
-        {
-          Clause* demodulator = qr.data->clause;
-          Literal* equation = (*demodulator)[0];
-          ASS(equation->isEquality() && equation->isPositive());
-          for (unsigned side = 0; side < 2; side++) {
-            Substitution subst;
-            if (!MatchingUtils::matchTerms(equation->termArg(side), trm, subst)) {
-              continue;
-            }
-            if (SubstHelper::apply(equation->termArg(1 - side), subst) != rhsS) {
-              continue;
-            }
-            InferenceStore::instance()->recordPremiseUse(replacement, cl, lit,
-              trm, 0, Substitution());
-            InferenceStore::instance()->recordRewritten(replacement, cl, lit, resLit,
-              lit->isEquality() ? EqHelper::replace(lit->termArg(0), trm, rhsS)
-                                : TermList::empty());
-            InferenceStore::instance()->recordPremiseUse(replacement,
-              demodulator, equation, equation->termArg(side), 0, subst);
-            break;
-          }
-        }
+        // Which subterm of which literal was rewritten, and by what: worked
+        // out into premise uses only if the clause is asked about
+        // (`InferenceStore::recordDemodulation`), as most never reach a proof.
+        InferenceStore::instance()->recordDemodulation(replacement, lit, trm, rhsS);
         return true;
       }
     }

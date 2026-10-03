@@ -108,9 +108,7 @@ public:
     // keep; the literal dropped is the second of them.
     {
       Stack<std::pair<unsigned, TermList>> bindings;
-      DHSet<unsigned, FnvHash, IdentityHash> vars;
-      _cl->collectVars(vars);
-      for (unsigned v : iterTraits(vars.iterator())) {
+      for (unsigned v : iterTraits(InferenceStore::instance()->variablesOf(_cl).iter())) {
         bindings.push({v, subst.apply(TermList(v, false), 0)});
       }
       InferenceStore::instance()->recordPremiseUse(cl, _cl, skipped,

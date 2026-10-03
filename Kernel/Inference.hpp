@@ -914,9 +914,9 @@ public:
   /** Return the inference rule */
   InferenceRule rule() const { return _rule; }
   /** The source file of where in vampire the inference was made, or null. */
-  const char* siteFile() const { return _siteFile; }
+  const char* siteFile() const { return _site.line() ? _site.file_name() : nullptr; }
   /** The line of where in vampire the inference was made, 0 if unknown. */
-  unsigned siteLine() const { return _siteLine; }
+  unsigned siteLine() const { return _site.line(); }
 
   unsigned char getSineLevel() const { return _sineLevel; }
   /* should be only used to initialize the "whole chain" by SineUtils */
@@ -1007,14 +1007,17 @@ private:
 
   SplitSet* _splits;
 
+  /**
+   * Where in vampire the inference was made (`siteFile`, `siteLine`): one
+   * pointer, beside the others, as every unit has one.
+   */
+  std::source_location _site = std::source_location();
+
   /** age */
   unsigned _age;
 
   /** The rule used */
   InferenceRule _rule : 8;
-  /** Where in vampire the inference was made (`siteFile`, `siteLine`). */
-  const char* _siteFile = nullptr;
-  unsigned _siteLine = 0;
   /** Sine level computed in SineUtils and used in various heuristics.
    * May stay uninitialized (i.e. always MAX), if not needed
    **/

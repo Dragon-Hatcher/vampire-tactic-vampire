@@ -82,9 +82,7 @@ SimplifyingGeneratingInference1::Result GaussianVariableElimination::rewrite(Cla
   // solved for it: which instance it is is the whole of what the step did.
   {
     Substitution s;
-    DHSet<unsigned, FnvHash, IdentityHash> vars;
-    cl.collectVars(vars);
-    for (unsigned v : iterTraits(vars.iterator()))
+    for (unsigned v : iterTraits(InferenceStore::instance()->variablesOf(&cl).iter()))
       s.bindUnbound(v, v == find.var() ? replace : TermList(v, false));
     // And the literal it solved, which the instance makes false.
     InferenceStore::instance()->recordPremiseUse(res, &cl, cl[skipLiteral],
