@@ -109,6 +109,12 @@ Term* EqHelper::replace(Term* trm0, TermList tSrc, TermList tDest)
   modified.push(false);
   toDo.push(trm0->args());
 
+  // A proper subterm weighs strictly less than the term it is in, so a
+  // subterm no heavier than @b tSrc that is not @b tSrc does not contain it,
+  // and neither does a ground one when @b tSrc is a variable: each is kept as
+  // it is rather than walked.
+  unsigned srcWeight = tSrc.isVar() ? 1 : tSrc.term()->weight();
+
   for (;;) {
     TermList* tt=toDo.pop();
     if (tt->isEmpty()) {
@@ -148,6 +154,10 @@ Term* EqHelper::replace(Term* trm0, TermList tSrc, TermList tDest)
     }
     ASS(tl.isTerm());
     Term* t=tl.term();
+    if (t->weight() <= srcWeight || (tSrc.isVar() && t->ground())) {
+      args.push(tl);
+      continue;
+    }
     terms.push(t);
     modified.push(false);
     toDo.push(t->args());
