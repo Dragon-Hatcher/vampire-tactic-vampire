@@ -512,6 +512,10 @@ public:
    */
   void reset()
   {
+    // nothing to reset, and maps are reset far more often than filled
+    if (_noOfEntries == 0) {
+      return;
+    }
     for (int i = _capacity-1;i >= 0;i--) {
       _entries[i].reset();
     }
