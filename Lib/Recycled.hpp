@@ -134,8 +134,10 @@ class Recycled
 {
   using Self = IF_USE_PTRS(std::unique_ptr<T>,T);
   Self _self;
-  Reset _reset;
-  Keep _keep;
+  // Empty policies, which take no room: a recycled object is then just its
+  // pointer, which lets what holds one fit the small-object allocator.
+  [[no_unique_address]] Reset _reset;
+  [[no_unique_address]] Keep _keep;
 
   static bool memAlive;
   static Stack<Self>& mem() {
