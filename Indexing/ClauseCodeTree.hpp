@@ -134,7 +134,15 @@ public:
      */
     DArray<LitInfo> lInfos;
 
-    Stack<Recycled<LiteralMatcher, NoReset>> lms;
+    /** The literal matchers entered, one for each index literal matched so far. */
+    Stack<LiteralMatcher*> lms;
+    /**
+     * One literal matcher for each depth a query has entered, kept from one
+     * query to the next (`enterLiteral`): each is entered and left many times
+     * in each subsumption check, and taking one from a free list and giving
+     * it back each time cost more than many a match. `init` makes one anew.
+     */
+    Stack<LiteralMatcher*> _lmPool;
 
     /**
      * The flat terms the last query's literal infos were made in, for the
@@ -143,9 +151,18 @@ public:
      * cost as much as many a match. Taken by `spare`.
      */
     Stack<FlatTerm*> _spares;
-    FlatTerm* spare() { return _spares.isEmpty() ? nullptr : _spares.pop(); }
-    static constexpr size_t MAX_SPARE_ENTRIES = 1024;
-    static constexpr unsigned MAX_SPARES = 64;
+    /** How many entries the spares have room for together. */
+    size_t _spareEntries = 0;
+    FlatTerm* spare() {
+      if (_spares.isEmpty()) {
+        return nullptr;
+      }
+      FlatTerm* s = _spares.pop();
+      _spareEntries -= s->capacity();
+      return s;
+    }
+    /** At most this much room is kept, about a megabyte. */
+    static constexpr size_t MAX_SPARE_ENTRIES = 1 << 17;
 
   public:
     ClauseMatcher() = default;
@@ -154,6 +171,9 @@ public:
     ~ClauseMatcher() {
       while (_spares.isNonEmpty()) {
         _spares.pop()->destroy();
+      }
+      while (_lmPool.isNonEmpty()) {
+        delete _lmPool.pop();
       }
     }
   };

@@ -530,10 +530,12 @@ void ClauseCodeTree::ClauseMatcher::reset()
 {
   unsigned liCnt=lInfos.size();
   for(unsigned i=0;i<liCnt;i++) {
-    // A large one is not kept, so that one large query does not hold its
-    // room for as long as the matcher is recycled.
-    if (lInfos[i].ft->capacity() <= MAX_SPARE_ENTRIES && _spares.size() < MAX_SPARES) {
+    // Only so much room is kept, so that one large query does not hold it
+    // for as long as the matcher is recycled.
+    size_t room = lInfos[i].ft->capacity();
+    if (_spareEntries + room <= MAX_SPARE_ENTRIES) {
       _spares.push(lInfos[i].ft);
+      _spareEntries += room;
     } else {
       lInfos[i].dispose();
     }
@@ -561,7 +563,7 @@ Clause* ClauseCodeTree::ClauseMatcher::next(int& resolvedQueryLit)
     static unsigned steps = 0;
     if (!(++steps % 16))
       Timer::beat();
-    LiteralMatcher* lm = &*lms.top();
+    LiteralMatcher* lm = lms.top();
 
     //get next literal from the literal matcher
     bool found=lm->next();
@@ -661,7 +663,7 @@ void ClauseCodeTree::ClauseMatcher::enterLiteral(CodeOp* entry, bool seekOnlySuc
   }
 
   if(lms.isNonEmpty()) {
-    Recycled<LiteralMatcher, NoReset>& prevLM = lms.top();
+    LiteralMatcher* prevLM = lms.top();
     ILStruct* ils=prevLM->op->getILS();
     ASS_EQ(ils->timestamp,tree->_curTimeStamp);
     ASS(!ils->visited);
@@ -680,9 +682,13 @@ void ClauseCodeTree::ClauseMatcher::enterLiteral(CodeOp* entry, bool seekOnlySuc
     linfoCnt/=2;
   }
 
-  Recycled<LiteralMatcher, NoReset> lm;
+  size_t depth = lms.size();
+  if (depth == _lmPool.size()) {
+    _lmPool.push(new LiteralMatcher());
+  }
+  LiteralMatcher* lm = _lmPool[depth];
   lm->init(*tree, entry, lInfos.array(), linfoCnt, seekOnlySuccess);
-  lms.push(std::move(lm));
+  lms.push(lm);
 }
 
 void ClauseCodeTree::ClauseMatcher::leaveLiteral()
@@ -692,7 +698,7 @@ void ClauseCodeTree::ClauseMatcher::leaveLiteral()
   lms.pop();
 
   if(lms.isNonEmpty()) {
-    LiteralMatcher* prevLM = &*lms.top();
+    LiteralMatcher* prevLM = lms.top();
     ILStruct* ils=prevLM->op->getILS();
     ASS_EQ(ils->timestamp,tree->_curTimeStamp);
     ASS(ils->visited);
@@ -747,7 +753,7 @@ bool ClauseCodeTree::ClauseMatcher::checkCandidate(Clause* cl, int& resolvedQuer
 
   bool newMatches=false;
   for(int i=clen-1;i>=0;i--) {
-    LiteralMatcher* lm = &*lms[i];
+    LiteralMatcher* lm = lms[i];
     if(lm->eagerlyMatched()) {
       break;
     }

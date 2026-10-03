@@ -143,6 +143,37 @@ FlatTerm* FlatTerm::create(TermStack ts)
   return res;
 }
 
+/**
+ * The entries of @b src[0, len) that hold anything, copied to the same places
+ * in @b dst: a function not yet expanded is its three entries and then room
+ * its expansion will fill, written from the term itself, so the room is not
+ * copied. What a flat term is made with is mostly such room.
+ */
+void FlatTerm::copyWritten(Entry* dst, const Entry* src, size_t len)
+{
+  size_t pos = 0;
+  while (pos < len) {
+    switch (src[pos]._tag()) {
+      case VAR:
+        dst[pos] = src[pos];
+        pos++;
+        break;
+      case FUN_UNEXPANDED:
+        ASS_EQ(src[pos+2]._tag(), FUN_RIGHT_OFS);
+        memcpy(&dst[pos], &src[pos], FUNCTION_ENTRY_COUNT*sizeof(Entry));
+        pos += src[pos+2]._number();
+        break;
+      default:
+        ASS_EQ(src[pos]._tag(), FUN);
+        // expanded: its arguments follow it
+        memcpy(&dst[pos], &src[pos], FUNCTION_ENTRY_COUNT*sizeof(Entry));
+        pos += FUNCTION_ENTRY_COUNT;
+        break;
+    }
+  }
+  ASS_EQ(pos, len);
+}
+
 FlatTerm* FlatTerm::copy(const FlatTerm* ft)
 {
   return copy(ft, nullptr);
@@ -162,7 +193,7 @@ FlatTerm* FlatTerm::copy(const FlatTerm* ft, FlatTerm* reuse)
     }
     res = new(entries) FlatTerm(entries);
   }
-  memcpy(res->_data, ft->_data, entries*sizeof(Entry));
+  copyWritten(res->_data, ft->_data, entries);
   return res;
 }
 
@@ -198,26 +229,18 @@ void FlatTerm::swapCommutativePredicateArguments()
 
   ASS_EQ(secStart+secLen,_length);
 
+  // Each argument is moved by what it holds (`copyWritten`), through a buffer
+  // holding both: they may overlap where they end up.
   static DArray<Entry> buf;
-  if(firstLen>secLen) {
-    buf.ensure(firstLen);
-    memcpy(buf.array(), &_data[firstStart], firstLen*sizeof(Entry));
-    memcpy(&_data[firstStart], &_data[secStart], secLen*sizeof(Entry));
-    memcpy(&_data[firstStart+secLen], buf.array(), firstLen*sizeof(Entry));
-  }
-  else {
-    buf.ensure(secLen);
-    memcpy(buf.array(), &_data[secStart], secLen*sizeof(Entry));
-    memcpy(&_data[firstStart+secLen], &_data[firstStart], firstLen*sizeof(Entry));
-    memcpy(&_data[firstStart], buf.array(), secLen*sizeof(Entry));
-  }
+  buf.ensure(firstLen + secLen);
+  copyWritten(buf.array(), &_data[secStart], secLen);
+  copyWritten(buf.array() + secLen, &_data[firstStart], firstLen);
+  copyWritten(&_data[firstStart], buf.array(), secLen);
+  copyWritten(&_data[firstStart + secLen], buf.array() + secLen, firstLen);
 }
 
-void FlatTerm::Entry::expand()
+void FlatTerm::Entry::expandUnexpanded()
 {
-  if (_tag()==FUN) {
-    return;
-  }
   ASS_EQ(_tag(), FUN_UNEXPANDED);
   ASS_EQ(this[1]._tag(), FUN_TERM_PTR);
   ASS_EQ(this[2]._tag(), FUN_RIGHT_OFS);

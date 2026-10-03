@@ -327,11 +327,26 @@ public:
   Result apply(Arg const& toEval) 
   {
     /* recursion state. Contains a stack of items that are being recursed on.
-     * Both stacks are taken from the recycled ones together, which is one
-     * round trip to the free list rather than two on every evaluation. */
-    Recycled<std::tuple<Stack<BottomUpChildIter<Arg>>, Stack<Result>>> stacks;
-    auto& recState = std::get<0>(*stacks);
-    auto& recResults = std::get<1>(*stacks);
+     * The stacks are kept for each depth an evaluation is entered at -- the
+     * function evaluated can evaluate again -- from one evaluation to the
+     * next, rather than taken from a free list and given back on each: this
+     * is what applying a substitution is. Vampire searches on one thread. */
+    struct Frame {
+      Stack<BottomUpChildIter<Arg>> recState;
+      Stack<Result> recResults;
+    };
+    static Stack<Frame*> frames;
+    static unsigned depth = 0;
+    if (depth == frames.size()) {
+      frames.push(new Frame());
+    }
+    Frame& frame = *frames[depth++];
+    struct Leave { ~Leave() { depth--; } } leave;
+    auto& recState = frame.recState;
+    auto& recResults = frame.recResults;
+    // An evaluation that threw may have left anything in them.
+    recState.reset();
+    recResults.reset();
 
     recState.push(BottomUpChildIter<Arg>(toEval, _context));
 
