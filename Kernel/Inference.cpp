@@ -108,7 +108,7 @@ void Inference::destroy()
 }
 
 Inference::Inference(const NeedsMinimization& fsr) {
-  _site = fsr.site;
+  setSite(fsr.site);
   initMany(fsr._rule,fsr._premises);
 
   ASS_REP(fsr._rule == InferenceRule::GLOBAL_SUBSUMPTION, ruleName(fsr._rule));
@@ -118,14 +118,14 @@ Inference::Inference(const NeedsMinimization& fsr) {
 }
 
 Inference::Inference(const InferenceOfASatClause& isc) {
-  _site = isc.site;
+  setSite(isc.site);
   initMany(isc.rule, isc.premises);
   _kind = Kind::SAT;
   _ptr2 = isc.clause;
 }
 
 Inference::Inference(const ComponentClauseInference& cci) {
-  _site = cci.site;
+  setSite(cci.site);
   initMany(cci.rule, cci.premises);
   _ptr2 = cci.causalParent;
 }
@@ -352,18 +352,18 @@ void Inference::initMany(InferenceRule r, UnitList* premises)
 }
 
 Inference::Inference(const FromInput& fi) {
-  _site = fi.site;
+  setSite(fi.site);
   init0(fi.inputType,InferenceRule::INPUT);
 }
 
 Inference::Inference(const TheoryAxiom& ta) {
-  _site = ta.site;
+  setSite(ta.site);
   init0(UnitInputType::AXIOM,ta.rule);
   ASS_REP(isTheoryAxiom(), ruleName(ta.rule));
 }
 
 Inference::Inference(const FormulaClauseTransformation& ft) {
-  _site = ft.site;
+  setSite(ft.site);
   init1(ft.rule,ft.premise);
 
   ASS_REP(isFormulaClauseTransformation(ft.rule),ruleName(ft.rule));
@@ -372,7 +372,7 @@ Inference::Inference(const FormulaClauseTransformation& ft) {
 }
 
 Inference::Inference(const FormulaClauseTransformationMany& ft) {
-  _site = ft.site;
+  setSite(ft.site);
   initMany(ft.rule,ft.premises);
 
   ASS_REP(isFormulaClauseTransformation(ft.rule),ruleName(ft.rule));
@@ -382,7 +382,7 @@ Inference::Inference(const FormulaClauseTransformationMany& ft) {
 }
 
 Inference::Inference(const GeneratingInference1& gi) {
-  _site = gi.site;
+  setSite(gi.site);
   init1(gi.rule,gi.premise);
 
   ASS_REP(isGeneratingInferenceRule(gi.rule),ruleName(gi.rule));
@@ -392,7 +392,7 @@ Inference::Inference(const GeneratingInference1& gi) {
 }
 
 Inference::Inference(const GeneratingInference2& gi) {
-  _site = gi.site;
+  setSite(gi.site);
   init2(gi.rule,gi.premise1,gi.premise2);
 
   ASS_REP(isGeneratingInferenceRule(gi.rule),ruleName(gi.rule));
@@ -403,7 +403,7 @@ Inference::Inference(const GeneratingInference2& gi) {
 }
 
 Inference::Inference(const GeneratingInferenceMany& gi) {
-  _site = gi.site;
+  setSite(gi.site);
   initMany(gi.rule,gi.premises);
 
   ASS_REP(isGeneratingInferenceRule(gi.rule),ruleName(gi.rule));
@@ -419,7 +419,7 @@ Inference::Inference(const GeneratingInferenceMany& gi) {
 }
 
 Inference::Inference(const SimplifyingInference1& si) {
-  _site = si.site;
+  setSite(si.site);
   init1(si.rule,si.premise);
 
   ASS_REP(isSimplifyingInferenceRule(si.rule),ruleName(si.rule));
@@ -429,7 +429,7 @@ Inference::Inference(const SimplifyingInference1& si) {
 }
 
 Inference::Inference(const SimplifyingInference2& si) {
-  _site = si.site;
+  setSite(si.site);
   init2(si.rule,si.premise1,si.premise2);
 
   ASS_REP(isSimplifyingInferenceRule(si.rule),ruleName(si.rule));
@@ -440,7 +440,7 @@ Inference::Inference(const SimplifyingInference2& si) {
 }
 
 Inference::Inference(const SimplifyingInferenceMany& si) {
-  _site = si.site;
+  setSite(si.site);
   initMany(si.rule,si.premises);
 
   ASS_REP(isSimplifyingInferenceRule(si.rule),ruleName(si.rule));
@@ -451,28 +451,28 @@ Inference::Inference(const SimplifyingInferenceMany& si) {
 }
 
 Inference::Inference(const NonspecificInference0& gi) {
-  _site = gi.site;
+  setSite(gi.site);
   init0(gi.inputType,gi.rule);
 
   ASS_REP(isNonSpecificInferenceRule(gi.rule), ruleName(gi.rule));
 }
 
 Inference::Inference(const NonspecificInference1& gi) {
-  _site = gi.site;
+  setSite(gi.site);
   init1(gi.rule,gi.premise);
 
   ASS_REP(isNonSpecificInferenceRule(gi.rule), ruleName(gi.rule));
 }
 
 Inference::Inference(const NonspecificInference2& gi) {
-  _site = gi.site;
+  setSite(gi.site);
   init2(gi.rule,gi.premise1,gi.premise2);
 
   ASS_REP(isNonSpecificInferenceRule(gi.rule), ruleName(gi.rule));
 }
 
 Inference::Inference(const NonspecificInferenceMany& gi) {
-  _site = gi.site;
+  setSite(gi.site);
   initMany(gi.rule,gi.premises);
 
   ASS_REP(isNonSpecificInferenceRule(gi.rule), ruleName(gi.rule));

@@ -71,6 +71,16 @@ else()
   add_compile_definitions(CHECK_LEAKS=0)
 endif()
 
+# Where in vampire each inference was made, kept on it (`Inference::siteFile`):
+# for tracking which sites a proof's steps came from, and costing every unit
+# eight bytes, so it is kept only when asked for or in a debug build.
+option(INFERENCE_SITES "record where in vampire each inference is made" OFF)
+if(INFERENCE_SITES OR CMAKE_BUILD_TYPE STREQUAL Debug)
+  add_compile_definitions(VINFERENCE_SITES=1)
+else()
+  add_compile_definitions(VINFERENCE_SITES=0)
+endif()
+
 option(TIME_PROFILING "enable internal profiler" OFF)
 if(TIME_PROFILING)
   message(STATUS "VTIME_PROFILING = 1")
