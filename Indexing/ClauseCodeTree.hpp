@@ -135,6 +135,27 @@ public:
     DArray<LitInfo> lInfos;
 
     Stack<Recycled<LiteralMatcher, NoReset>> lms;
+
+    /**
+     * The flat terms the last query's literal infos were made in, for the
+     * next query's to be made in: a matcher is recycled from one subsumption
+     * check to the next, and allocating a flat term for each literal of each
+     * cost as much as many a match. Taken by `spare`.
+     */
+    Stack<FlatTerm*> _spares;
+    FlatTerm* spare() { return _spares.isEmpty() ? nullptr : _spares.pop(); }
+    static constexpr size_t MAX_SPARE_ENTRIES = 1024;
+    static constexpr unsigned MAX_SPARES = 64;
+
+  public:
+    ClauseMatcher() = default;
+    ClauseMatcher(const ClauseMatcher&) = delete;
+    ClauseMatcher& operator=(const ClauseMatcher&) = delete;
+    ~ClauseMatcher() {
+      while (_spares.isNonEmpty()) {
+        _spares.pop()->destroy();
+      }
+    }
   };
 
 private:

@@ -29,10 +29,19 @@ public:
    * called on each flat term entry before traversing its arguments.
    */
   static FlatTerm* create(TermList t);
+  /**
+   * The same, made in @b reuse where it has room, which is destroyed where it
+   * has not: what a matcher asked about one term after another keeps.
+   */
+  static FlatTerm* create(TermList t, FlatTerm* reuse);
   static FlatTerm* create(TermStack ts);
   void destroy();
+  /** How many entries there is room for. */
+  size_t capacity() const { return _capacity; }
 
   static FlatTerm* copy(const FlatTerm* ft);
+  /** The same, made in @b reuse where it has room (`create`). */
+  static FlatTerm* copy(const FlatTerm* ft, FlatTerm* reuse);
 
   static constexpr size_t FUNCTION_ENTRY_COUNT=3;
 
@@ -112,7 +121,7 @@ private:
     pos += e[pos+2]._number();
   }
 
-  FlatTerm(size_t length) : _length(length) {}
+  FlatTerm(size_t length) : _length(length), _capacity(length) {}
   void* operator new(size_t,unsigned length);
 
   /**
@@ -122,6 +131,8 @@ private:
   void operator delete(void*);
 
   size_t _length;
+  /** The entries allocated, at least @b _length. */
+  size_t _capacity;
   Entry _data[1];
 };
 
