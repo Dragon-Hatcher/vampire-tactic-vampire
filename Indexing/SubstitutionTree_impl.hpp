@@ -196,9 +196,17 @@ start:
   pnode=inode->childByTop(term.top(),true);
 
   if (*pnode == 0) {
-    BinaryHeap<Binding, BindingComparator<LeafData_>> remainingBindings;
-    for (auto [var, term] : iterTraits(svBindings.items())) {
-      remainingBindings.insert(Binding(var, term));
+    // Kept from one insertion to the next, as `unresolvedSplits` is, and
+    // filled by the map's own iterator: what is allocated otherwise, for
+    // every clause indexed, costs as much as the insertion.
+    static BinaryHeap<Binding, BindingComparator<LeafData_>> remainingBindings;
+    remainingBindings.reset();
+    typename BindingMap::Iterator bit(svBindings);
+    while (bit.hasNext()) {
+      unsigned var;
+      TermList bound;
+      bit.next(var, bound);
+      remainingBindings.insert(Binding(var, bound));
     }
     while (!remainingBindings.isEmpty()) {
       Binding b=remainingBindings.pop();
@@ -227,7 +235,9 @@ start:
   // ss is the term in node, tt is the term to be inserted
   // ss and tt have the same top symbols but are not equal
   // create the common subterm of ss,tt and an alternative node
-  Stack<TermList*> subterms(64);
+  // Recycled rather than allocated with room for 64 on every insertion.
+  Recycled<Stack<TermList*>> subtermStack;
+  Stack<TermList*>& subterms = *subtermStack;
   for (;;) {
     if (*tt!=*ss && TermList::sameTop(*ss,*tt)) {
       // ss and tt have the same tops and are different, so must be non-variables
@@ -339,7 +349,9 @@ void SubstitutionTree<LeafData_>::remove(BindingMap& svBindings, LeafData ld)
     ASS(!ss->isEmpty());
 
     // computing the disagreement set of the two terms
-    Stack<TermList*> subterms(120);
+    // Recycled rather than allocated with room for 120 each time.
+    Recycled<Stack<TermList*>> subtermStack;
+    Stack<TermList*>& subterms = *subtermStack;
 
     subterms.push(ss);
     subterms.push(t.term()->args());
@@ -434,7 +446,9 @@ typename SubstitutionTree<LeafData_>::Leaf* SubstitutionTree<LeafData_>::findLea
     ASS(!ss->isEmpty());
 
     // computing the disagreement set of the two terms
-    Stack<TermList*> subterms(120);
+    // Recycled rather than allocated with room for 120 each time.
+    Recycled<Stack<TermList*>> subtermStack;
+    Stack<TermList*>& subterms = *subtermStack;
 
     subterms.push(ss);
     subterms.push(t.term()->args());
