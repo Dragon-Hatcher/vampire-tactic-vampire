@@ -86,7 +86,10 @@ CodeTree::LitInfo CodeTree::LitInfo::getReversed(const LitInfo& li, FlatTerm* re
 CodeTree::LitInfo CodeTree::LitInfo::getOpposite(const LitInfo& li, FlatTerm* reuse)
 {
   FlatTerm* ft=FlatTerm::copy(li.ft, reuse);
-  ft->changeLiteralPolarity();
+  // Matching reads the polarity off the header, and the literal itself only
+  // to check a ground term against it: looking up, or making, the literal of
+  // the other polarity for every literal of every query is done only then.
+  ft->flipPolarity();
 #if GROUND_TERM_CHECK
   ASS_EQ((*ft)[1]._tag(), FlatTerm::FUN_TERM_PTR);
   (*ft)[1]._setTerm(Literal::complementaryLiteral(static_cast<Literal*>((*ft)[1]._term())));
