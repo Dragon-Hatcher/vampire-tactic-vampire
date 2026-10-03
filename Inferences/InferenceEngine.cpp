@@ -426,8 +426,10 @@ SimplifyingGeneratingInference1::Result SimplifyingGeneratingLiteralSimplificati
   DEBUG("in:  ", *cl_)
   auto& cl = *cl_;
   Stack<Literal*> out(cl.size());
-  // What each literal became, for replaying the step.
-  Stack<InferenceStore::LiteralImage> images(cl.size());
+  // What each literal became -- itself, another, or nothing where it was
+  // found false -- for replaying the step; made into its images only if the
+  // clause changes, which it seldom does.
+  Recycled<Stack<Literal*>> became;
 
   bool changed = false;
   bool allLessEq = true;
@@ -439,7 +441,7 @@ SimplifyingGeneratingInference1::Result SimplifyingGeneratingLiteralSimplificati
     auto result = simplifyLiteral(orig);
 
     if (result.isLiteral() && result.unwrapLiteral() == orig ) {
-      images.push({orig, orig, RationalConstantType(1)});
+      became->push(orig);
       out.push(orig);
     } else {
       auto simpl = result;
@@ -452,7 +454,7 @@ SimplifyingGeneratingInference1::Result SimplifyingGeneratingLiteralSimplificati
           return SimplifyingGeneratingInference1::Result::tautology();
         } else {
           /* do not add the literal to the output stack */
-          images.push({orig, nullptr, RationalConstantType(1)});
+          became->push(nullptr);
           changed = true;
         }
 
@@ -461,7 +463,7 @@ SimplifyingGeneratingInference1::Result SimplifyingGeneratingLiteralSimplificati
         Literal* simplLit = simpl.unwrapLiteral();
         ASS_NEQ(simplLit, orig)
         changed = true;
-        images.push({orig, simplLit, RationalConstantType(1)});
+        became->push(simplLit);
         out.push(simplLit);
 
         if (doOrderingCheck) {
@@ -490,6 +492,10 @@ SimplifyingGeneratingInference1::Result SimplifyingGeneratingLiteralSimplificati
   if (!changed) {
     return SimplifyingGeneratingInference1::Result::nop(cl_);
   } else {
+    Stack<InferenceStore::LiteralImage> images(cl.size());
+    for (unsigned i = 0; i < cl.size(); i++) {
+      images.push({cl[i], (*became)[i], RationalConstantType(1)});
+    }
     auto result = Clause::fromStack(out, SimplifyingInference1(_rule, cl_));
     InferenceStore::instance()->recordLiteralImages(result,
       // The two literal simplifications there are: polynomial evaluation and

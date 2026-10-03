@@ -258,9 +258,28 @@ Term* BottomUpTermTransformer::transform(Term* term)
     return transformSpecial(term);
   }
 
-  Stack<TermList*> toDo(8);
-  Stack<Term*> terms(8);
-  Stack<TermList> args(8);
+  // The stacks this works in, one set for each depth it is entered at -- a
+  // transformation can transform again -- kept from one call to the next,
+  // rather than allocated for every literal. Vampire searches on one thread.
+  struct Frame {
+    Stack<TermList*> toDo;
+    Stack<Term*> terms;
+    Stack<TermList> args;
+  };
+  static Stack<Frame*> frames;
+  static unsigned depth = 0;
+  if (depth == frames.size()) {
+    frames.push(new Frame());
+  }
+  Frame& frame = *frames[depth++];
+  struct Leave { ~Leave() { depth--; } } leave;
+  auto& toDo = frame.toDo;
+  auto& terms = frame.terms;
+  auto& args = frame.args;
+  // A call that threw may have left anything in them.
+  toDo.reset();
+  terms.reset();
+  args.reset();
 
   toDo.push(term->args());
 
@@ -292,7 +311,15 @@ Term* BottomUpTermTransformer::transform(Term* term)
         args.truncate(args.length() - orig->arity());
       }
 
-      if(orig->isSort()){
+      // A shared term whose arguments came back as they were is itself: making
+      // it again would only find it again among the shared terms.
+      bool same = orig->shared();
+      for (unsigned i = 0; same && i < orig->arity(); i++) {
+        same = argLst[i] == *orig->nthArgument(i);
+      }
+      if (same) {
+        args.push(transformSubterm(TermList(orig)));
+      } else if(orig->isSort()){
         //For most applications we probably dont want to transform sorts
         //however, we don't enforce that here, inheriting classes can decide
         //for themselves
@@ -338,6 +365,15 @@ Term* BottomUpTermTransformer::transform(Term* term)
 #else // in release, it's fine too, because Literal::create won't touch the pointer in the zero arity case
   TermList* argLst=               &args.top() - (term->arity() - 1);
 #endif
+  // As below the top: a shared term or literal whose arguments came back as
+  // they were is itself.
+  bool same = term->shared();
+  for (unsigned i = 0; same && i < term->arity(); i++) {
+    same = argLst[i] == *term->nthArgument(i);
+  }
+  if (same) {
+    return term;
+  }
   if (term->isLiteral()) {
     return Literal::create(static_cast<Literal*>(term), argLst);
   } else {

@@ -67,8 +67,10 @@ Clause* InterpretedEvaluation::simplify(Clause* cl)
 
 
     RStack<Literal*> resLits;
-    // What each literal became, for replaying the step.
-    Stack<InferenceStore::LiteralImage> images;
+    // What each literal became -- itself, another, or nothing where it was
+    // found false -- for replaying the step; made into its images only if
+    // the clause changes, which it seldom does.
+    RStack<Literal*> became;
     unsigned clen=cl->length();
     bool modified=false;
     for(unsigned li=0;li<clen; li++) {
@@ -77,7 +79,7 @@ Clause* InterpretedEvaluation::simplify(Clause* cl)
       bool constant, constTrue;
       bool litMod=simplifyLiteral(lit, constant, res, constTrue);
       if(!litMod) {
-        images.push({lit, lit, RationalConstantType(1)});
+        became->push(lit);
         resLits->push(lit);
         continue;
       }
@@ -87,18 +89,22 @@ Clause* InterpretedEvaluation::simplify(Clause* cl)
           //cout << "evaluate " << cl->toString() << " to true" << endl;
           return 0;
         } else {
-          images.push({lit, nullptr, RationalConstantType(1)});
+          became->push(nullptr);
           continue;
         }
       }
 
-      images.push({lit, res, RationalConstantType(1)});
+      became->push(res);
       resLits->push(res);
     }
     if(!modified) {
       return cl;
     }
 
+    Stack<InferenceStore::LiteralImage> images;
+    for(unsigned li=0;li<clen; li++) {
+      images.push({(*cl)[li], (*became)[li], RationalConstantType(1)});
+    }
     Clause* result = Clause::fromStack(*resLits,SimplifyingInference1(InferenceRule::EVALUATION, cl));
     InferenceStore::instance()->recordLiteralImages(result,
       _doNormalize ? InferenceStore::LiteralProcedure::INTERPRETED_EVALUATION_NORMALIZING
