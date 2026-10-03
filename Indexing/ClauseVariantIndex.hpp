@@ -58,7 +58,24 @@ public:
 private:
   struct VariableIgnoringComparator;
 
-  typedef DHMap<unsigned, unsigned char, FnvHash, IdentityHash> VarCounts; // overflows allowed
+  /**
+   * How often each variable occurs, by its number: what the hash takes is
+   * the counts sorted, each as an `unsigned char` (overflows allowed), so a
+   * table by variable does what a map did without hashing each occurrence.
+   */
+  struct VarCounts {
+    Stack<unsigned> counts;
+    Stack<unsigned> seen;
+    void reset() {
+      for (unsigned v : iterTraits(seen.iter())) counts[v] = 0;
+      seen.reset();
+    }
+    void count(unsigned v) {
+      while (counts.size() <= v) counts.push(0);
+      if (counts[v]++ == 0) seen.push(v);
+    }
+    unsigned size() const { return seen.size(); }
+  };
 
   unsigned termFunctorHash(Term* t, unsigned hash_begin) {
     unsigned func = t->functor();
@@ -69,12 +86,7 @@ private:
   unsigned computeHashAndCountVariables(unsigned var, VarCounts& varCnts, unsigned hash_begin) {
     const unsigned varHash = 1u;
 
-    unsigned char* pcnt;
-    if (varCnts.getValuePtr(var,pcnt)) {
-      *pcnt = 1;
-    } else {
-      (*pcnt)++;
-    }
+    varCnts.count(var);
 
     // std::cout << "will hash variable" << std::endl;
     return DefaultHash::hash(varHash, hash_begin);
