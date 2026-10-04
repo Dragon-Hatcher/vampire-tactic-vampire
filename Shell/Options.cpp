@@ -1140,7 +1140,7 @@ Options::Options ()
        .description = "If false, LRS will not use limits to delete clauses entering passive."
      " (Only the retroactive deletes might apply.)",
        .tag = OptionTag::LRS})
-  #if VAMPIRE_PERF_EXISTS
+  // registered on all platforms, since schedules use them; only enforcing them needs perf
   , _instructionLimit("instruction_limit",this,0,
       {.short_name = "i",
        .description = "Limit the number (in millions) of executed instructions (excluding the kernel ones)."})
@@ -1151,7 +1151,6 @@ Options::Options ()
   , _parsingDoesNotCount("parsing_does_not_count",this,false,
       {.description = "Extend the instruction limit by the amount of instructions it took to parse the input problem.",
        .tag = OptionTag::DEVELOPMENT})
-  #endif
   , _memoryLimit("memory_limit",this,
 #if VDEBUG
                                        1024     //   1 GB
@@ -3600,9 +3599,7 @@ std::string Options::generateEncodedOptions() const
     forbidden.insert(&_multicore);
     forbidden.insert(&_statistics);
     forbidden.insert(&_forcedOptions);
-#if VAMPIRE_PERF_EXISTS
     forbidden.insert(&_parsingDoesNotCount);
-#endif
     forbidden.insert(&_ignoreMissing); // or maybe we do!
   }
 
