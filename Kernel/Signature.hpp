@@ -399,6 +399,7 @@ class Signature
     return addTypeCon(name, arity, added);
   }
 
+  std::string freshPrefix(const std::string& stem) const;
   Symbol* addFreshFunction(OperatorType* type, const char* prefix, const char* suffix = nullptr);
   Symbol* addFreshPredicate(OperatorType* type, const char* prefix, const char* suffix = nullptr);
   Symbol* addFreshTypeCon(unsigned arity, const char* prefix);

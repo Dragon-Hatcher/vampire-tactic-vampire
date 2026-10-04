@@ -613,10 +613,10 @@ SATLiteral Splitter::getLiteralFromName(SplitLevel compName)
 
 std::string Splitter::getFormulaStringFromName(SplitLevel compName, bool negated)
 {
+  // no symbol is added, so that the signature does not depend on the proof format
   if (splPrefix.empty()) {
     if(env.options->proof()==Options::Proof::TPTP){
-      unsigned spl = env.signature->addFreshPredicate(OperatorType::getPredicateType({}),"spl")->number();
-      splPrefix = env.signature->predicateName(spl)+"_";
+      splPrefix = env.signature->freshPrefix("spl");
     }
   }
 

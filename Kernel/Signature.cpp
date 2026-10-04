@@ -695,6 +695,29 @@ Signature::Symbol* Signature::addPredicate (const std::string& name,
 } // Signature::addPredicate
 
 /**
+ * Return a prefix of the form @b stem followed by a number and "_" that no
+ * symbol name starts with. Does not add a symbol.
+ */
+std::string Signature::freshPrefix(const std::string& stem) const
+{
+  auto taken = [&](const std::string& prefix) {
+    auto startsWith = [&](const std::string& name) { return name.rfind(prefix, 0) == 0; };
+    for (unsigned i = 0; i < _funs.length(); i++)
+      if (startsWith(_funs[i]->name())) return true;
+    for (unsigned i = 0; i < _preds.length(); i++)
+      if (startsWith(_preds[i]->name())) return true;
+    for (unsigned i = 0; i < _typeCons.length(); i++)
+      if (startsWith(_typeCons[i]->name())) return true;
+    return false;
+  };
+  for (unsigned k = 0;; k++) {
+    std::string prefix = stem + Int::toString(k) + "_";
+    if (!taken(prefix))
+      return prefix;
+  }
+}
+
+/**
  * Add fresh function of a given arity and with a given prefix. If suffix is non-zero,
  * the function name will be prefixI, where I is an integer, otherwise it will be
  * prefixI_suffix. The new function will be marked as skip for the purpose of equality
