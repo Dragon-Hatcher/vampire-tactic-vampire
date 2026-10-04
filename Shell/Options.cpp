@@ -2399,6 +2399,14 @@ Options::Options ()
             , equal(UnificationWithAbstraction::ALASCA_ONE_INTERP)
             , equal(UnificationWithAbstraction::AUTO)
             )));
+    // the ALASCA abstractions require alasca: without it the constraint
+    // literals they produce are dropped, which is unsound (#938)
+    _unificationWithAbstraction.addHardConstraint(
+        If(Or(equal(UnificationWithAbstraction::ALASCA_CAN_ABSTRACT)
+            , equal(UnificationWithAbstraction::ALASCA_MAIN)
+            , equal(UnificationWithAbstraction::ALASCA_MAIN_FLOOR)
+            , equal(UnificationWithAbstraction::ALASCA_ONE_INTERP)
+            )).then(_alasca.is(equal(true))));
 
     _viras.onlyUsefulWith(_alasca.is(equal(true)));
 
