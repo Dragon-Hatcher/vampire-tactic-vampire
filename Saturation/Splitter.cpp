@@ -780,6 +780,139 @@ void Splitter::conjectureSingleton(Literal* theLit, Clause* orig)
   }
 }
 
+/** Extend @b renaming to a variable renaming of @b from to @b to, if possible. */
+static bool renamingOfTerms(TermList from, TermList to,
+  Stack<std::pair<unsigned, unsigned>>& renaming)
+{
+  if (from.isVar()) {
+    if (!to.isVar()) {
+      return false;
+    }
+    for (auto [f, t] : renaming) {
+      if (f == from.var()) {
+        return t == to.var();
+      }
+      if (t == to.var()) {
+        return false; // a renaming is injective
+      }
+    }
+    renaming.push({from.var(), to.var()});
+    return true;
+  }
+  if (to.isVar()) {
+    return false;
+  }
+  Term* f = from.term();
+  Term* t = to.term();
+  if (f->functor() != t->functor()) {
+    return false;
+  }
+  for (unsigned i = 0; i < f->arity(); i++) {
+    if (!renamingOfTerms(*f->nthArgument(i), *t->nthArgument(i), renaming)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/** As renamingOfTerms, for literals; @b flipped swaps the sides of an equality. */
+static bool renamingOf(Literal* from, Literal* to, bool flipped,
+  Stack<std::pair<unsigned, unsigned>>& renaming)
+{
+  if (from->functor() != to->functor() || from->polarity() != to->polarity()) {
+    return false;
+  }
+  if (flipped && !from->isEquality()) {
+    return false;
+  }
+  for (unsigned i = 0; i < from->arity(); i++) {
+    unsigned j = flipped && from->isEquality() && i >= from->numTypeArguments()
+      ? from->arity() - 1 - (i - from->numTypeArguments()) : i;
+    if (!renamingOfTerms(*from->nthArgument(i), *to->nthArgument(j), renaming)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Depth-first search for a renaming of the literals of @b named from
+ * @b position on to the literals of @b comp not yet @b taken.
+ */
+static bool renamingFrom(Clause* named, unsigned size, Literal* const* comp,
+  unsigned position, Stack<bool>& taken,
+  Stack<std::pair<unsigned, unsigned>>& renaming)
+{
+  if (position == size) {
+    return true;
+  }
+  for (unsigned i = 0; i < size; i++) {
+    if (taken[i]) {
+      continue;
+    }
+    // try both orientations of an equality
+    for (unsigned flipped = 0; flipped < 2; flipped++) {
+      unsigned mark = renaming.size();
+      if (renamingOf((*named)[position], comp[i], flipped, renaming)) {
+        taken[i] = true;
+        if (renamingFrom(named, size, comp, position + 1, taken, renaming)) {
+          return true;
+        }
+        taken[i] = false;
+      }
+      renaming.truncate(mark);
+    }
+  }
+  return false;
+}
+
+/** Compute the renaming of component clause @b named to its variant @b comp. */
+static bool componentRenaming(Clause* named, unsigned size,
+  Literal* const* comp, Substitution& out)
+{
+  if (named->length() != size) {
+    return false;
+  }
+  Stack<bool> taken;
+  for (unsigned i = 0; i < size; i++) {
+    taken.push(false);
+  }
+  Stack<std::pair<unsigned, unsigned>> renaming;
+  if (!renamingFrom(named, size, comp, 0, taken, renaming)) {
+    return false;
+  }
+  out.reset();
+  for (auto [f, t] : renaming) {
+    out.bindUnbound(f, TermList(t, false));
+  }
+  return true;
+}
+
+/**
+ * Record, as a use of the component @b definition, the renaming of the
+ * component clause @b named to the literals @b comp it was found a variant of.
+ * The variant index does not keep this renaming, so it is recomputed.
+ */
+static void recordComponentRenaming(Unit* generated, Unit* definition,
+  Clause* named, unsigned size, Literal* const* comp)
+{
+  if (!InferenceStore::recording()) {
+    return;
+  }
+  Substitution renaming;
+  if (!componentRenaming(named, size, comp, renaming)) {
+    return;
+  }
+  Stack<std::pair<unsigned, TermList>> bindings;
+  DHSet<unsigned, FnvHash, IdentityHash> vars;
+  named->collectVars(vars);
+  for (unsigned v : iterTraits(vars.iterator())) {
+    bindings.push({v, renaming.apply(v)});
+  }
+  InferenceStore::instance()->recordPremiseUse(generated, definition,
+    TermList::empty(), 0, bindings);
+}
+
 bool Splitter::handleNonSplittable(Clause* cl)
 {
   if (_cleaveNonsplittables && cl->length() > 1) {
@@ -860,6 +993,9 @@ bool Splitter::handleNonSplittable(Clause* cl)
       env.proofExtra.insert(scl, new SATClauseExtra(nsClause));
 
     nsClause->setInference(new FOConversionInference(scl));
+
+    recordComponentRenaming(scl, getDefinitionFromName(compName), compCl,
+      cl->length(), cl->literals());
 
     if (_showSplitting) {
       std::cout << "[AVATAR] registering a non-splittable: "<< cl->toString() << std::endl;
@@ -1022,6 +1158,10 @@ bool Splitter::doSplitting(Clause* cl)
 
   UnitList* ps = 0;
   FormulaList* resLst=0;
+  // (definition, component clause, literals of cl) of each component, to record
+  // the renamings once the split clause exists; the literals are copied as the
+  // component stack is reused
+  Stack<std::tuple<Unit*, Clause*, LiteralStack>> named;
 
   unsigned compCnt = comps.size();
   for(unsigned i=0; i<compCnt; ++i) {
@@ -1041,6 +1181,9 @@ bool Splitter::doSplitting(Clause* cl)
 
     UnitList::push(getDefinitionFromName(compName),ps);
     FormulaList::push(new NamedFormula(getFormulaStringFromName(compName)),resLst);
+    if (InferenceStore::recording()) {
+      named.push({getDefinitionFromName(compName), compCl, comp});
+    }
   }
 
   SATClause* splitClause = SATClause::fromStack(satClauseLits);
@@ -1065,6 +1208,10 @@ bool Splitter::doSplitting(Clause* cl)
     env.proofExtra.insert(scl, new SATClauseExtra(splitClause));
 
   splitClause->setInference(new FOConversionInference(scl));
+
+  for (auto& [definition, compCl, comp] : named) {
+    recordComponentRenaming(scl, definition, compCl, comp.size(), comp.begin());
+  }
 
   addSatClauseToSolver(splitClause);
 
