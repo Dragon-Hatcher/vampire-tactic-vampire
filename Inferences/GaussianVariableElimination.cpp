@@ -12,6 +12,7 @@
 #include "Kernel/Rebalancing/Inverters.hpp"
 #include "Kernel/Clause.hpp"
 #include "Kernel/EqHelper.hpp"
+#include "Lib/Timer.hpp"
 
 #define DEBUG(...)  //DBG(__VA_ARGS__)
 
@@ -29,6 +30,11 @@ SimplifyingGeneratingInference1::Result GaussianVariableElimination::simplify(Cl
     auto& lit = *cl[i];
     if (lit.isEquality() && lit.isNegative()) { 
       for (auto b : Balancer(lit)) {
+        // a clause can have very many rebalancings, so count them as work
+        static unsigned balancings = 0;
+        static const unsigned BALANCINGS_PER_BEAT = 2;
+        if (++balancings % BALANCINGS_PER_BEAT == 0)
+          Timer::beat();
 
         /* found a rebalancing: lhs = rhs[lhs, ...] */
         auto lhs = b.lhs();
