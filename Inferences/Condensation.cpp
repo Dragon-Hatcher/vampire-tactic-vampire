@@ -18,6 +18,8 @@
 
 #include "Kernel/Term.hpp"
 #include "Kernel/Clause.hpp"
+#include "Kernel/InferenceStore.hpp"
+#include "Kernel/Substitution.hpp"
 #include "Kernel/MLMatcher.hpp"
 #include "Kernel/Inference.hpp"
 #include "Kernel/RobSubstitution.hpp"
@@ -122,7 +124,13 @@ Clause* Condensation::simplify(Clause* cl)
       }
 
       if(success) {
-        return Clause::fromArray(newLits.begin(), newLen, SimplifyingInference1(InferenceRule::CONDENSATION, cl));
+        Clause* res = Clause::fromArray(newLits.begin(), newLen, SimplifyingInference1(InferenceRule::CONDENSATION, cl));
+        // record the unifier
+        if (InferenceStore::recording()) {
+          InferenceStore::instance()->recordPremiseUse(res, cl, nullptr,
+            TermList::empty(), 0, InferenceStore::bankSubstitution(cl, *subst, 0));
+        }
+        return res;
       }
     }
   }

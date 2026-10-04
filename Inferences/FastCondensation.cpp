@@ -21,6 +21,10 @@
 #include "Kernel/Term.hpp"
 #include "Kernel/TermIterators.hpp"
 
+#include "Kernel/InferenceStore.hpp"
+#include "Kernel/Substitution.hpp"
+#include "Lib/DHSet.hpp"
+
 #include "FastCondensation.hpp"
 
 #undef LOGGING
@@ -45,6 +49,10 @@ struct CondensationBinder
   void reset()
   {
     bindings.reset();
+  }
+  bool binding(unsigned var, TermList& term)
+  {
+    return bindings.find(var, term);
   }
   bool bind(unsigned var, TermList term)
   {
@@ -127,7 +135,25 @@ Clause* FastCondensation<higherOrder>::simplify(Clause* cl)
           }
         }
  
-        return Clause::fromStack(*resLits, SimplifyingInference1(InferenceRule::CONDENSATION, cl));
+        Clause* res = Clause::fromStack(*resLits, SimplifyingInference1(InferenceRule::CONDENSATION, cl));
+        // record the matcher; only cLit's variables are read off the binder,
+        // which may still hold bindings from earlier failed attempts
+        if (InferenceStore::recording()) {
+          Substitution s;
+          DHSet<unsigned, FnvHash, IdentityHash> vars;
+          cl->collectVars(vars);
+          DHSet<unsigned, FnvHash, IdentityHash> moved;
+          for (unsigned v : iterTraits(VariableIterator(cLit)).map([](TermList t) { return t.var(); }))
+            moved.insert(v);
+          for (unsigned v : iterTraits(vars.iterator())) {
+            TermList bound;
+            s.bindUnbound(v, moved.contains(v) && cbinder.binding(v, bound)
+                ? bound : TermList(v, false));
+          }
+          InferenceStore::instance()->recordPremiseUse(res, cl, nullptr,
+            TermList::empty(), 0, s);
+        }
+        return res;
       }
     }
   }

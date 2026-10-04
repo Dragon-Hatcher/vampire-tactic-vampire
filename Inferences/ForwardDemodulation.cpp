@@ -21,6 +21,10 @@
 
 #include "Kernel/Clause.hpp"
 #include "Kernel/EqHelper.hpp"
+#include "Kernel/InferenceStore.hpp"
+#include "Kernel/Matcher.hpp"
+#include "Kernel/SubstHelper.hpp"
+#include "Kernel/Substitution.hpp"
 #include "Kernel/Inference.hpp"
 #include "Kernel/Ordering.hpp"
 #include "Kernel/Term.hpp"
@@ -174,6 +178,32 @@ bool ForwardDemodulation<higherOrder>::perform(Clause* cl, Clause*& replacement,
         replacement = Clause::fromStack(*resLits, SimplifyingInference2(InferenceRule::FORWARD_DEMODULATION, cl, qr.data->clause));
         if(env.options->proofExtra() == Options::ProofExtra::FULL)
           env.proofExtra.insert(replacement, new ForwardDemodulationExtra(lhs, trm));
+        // record the rewritten literal, and the side of the demodulator used and
+        // its matcher; the index holds the demodulator with normalised
+        // variables, so these are recovered by matching its own equation
+        // against the rewritten term
+        if (InferenceStore::recording()) {
+          Clause* demodulator = qr.data->clause;
+          Literal* equation = (*demodulator)[0];
+          ASS(equation->isEquality() && equation->isPositive());
+          for (unsigned side = 0; side < 2; side++) {
+            Substitution subst;
+            if (!MatchingUtils::matchTerms(equation->termArg(side), trm, subst)) {
+              continue;
+            }
+            if (SubstHelper::apply(equation->termArg(1 - side), subst) != rhsS) {
+              continue;
+            }
+            InferenceStore::instance()->recordPremiseUse(replacement, cl, lit,
+              trm, 0, Substitution());
+            InferenceStore::instance()->recordRewritten(replacement, cl, lit, resLit,
+              lit->isEquality() ? EqHelper::replace(lit->termArg(0), trm, rhsS)
+                                : TermList::empty());
+            InferenceStore::instance()->recordPremiseUse(replacement,
+              demodulator, equation, equation->termArg(side), 0, subst);
+            break;
+          }
+        }
         return true;
       }
     }

@@ -17,6 +17,7 @@
 #include "Kernel/EqHelper.hpp"
 #include "Kernel/Clause.hpp"
 #include "Lib/Environment.hpp"
+#include "Kernel/InferenceStore.hpp"
 #include "Shell/Statistics.hpp"
 #include "Saturation/SaturationAlgorithm.hpp"
 
@@ -47,6 +48,10 @@ Clause* InnerRewriting::simplify(Clause* cl)
             }
 
             RStack<Literal*> resLits;
+            Stack<std::pair<Literal*, Literal*>> rewritten;
+            if (InferenceStore::recording()) {
+              rewritten.push({lit, nLit});
+            }
 
             for (unsigned k = 0; k < len; k++) {
               if (k == i) {
@@ -62,11 +67,25 @@ Clause* InnerRewriting::simplify(Clause* cl)
                   env.statistics->innerRewritesToEqTaut++;
                   return nullptr;
                 }
+                if (rLit != oLit && InferenceStore::recording()) {
+                  rewritten.push({oLit, rLit});
+                }
                 resLits->push(rLit);
               }
             }
 
-            return Clause::fromStack(*resLits,SimplifyingInference1(InferenceRule::INNER_REWRITING, cl));
+            Clause* res = Clause::fromStack(*resLits,SimplifyingInference1(InferenceRule::INNER_REWRITING, cl));
+            // record the disequality used and the literals it rewrote
+            if (InferenceStore::recording()) {
+              InferenceStore::instance()->recordPremiseUse(res, cl, rwLit, lhs, 0,
+                Stack<std::pair<unsigned, TermList>>());
+              for (auto [from, to] : iterTraits(rewritten.iter())) {
+                InferenceStore::instance()->recordRewritten(res, cl, from, to,
+                  from->isEquality() ? EqHelper::replace(from->termArg(0), lhs, rhs)
+                                     : TermList::empty());
+              }
+            }
+            return res;
           }
         }
       }

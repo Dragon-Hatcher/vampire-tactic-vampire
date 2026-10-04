@@ -22,6 +22,10 @@
 #include "Kernel/Clause.hpp"
 #include "Kernel/ColorHelper.hpp"
 #include "Kernel/EqHelper.hpp"
+#include "Kernel/SubstHelper.hpp"
+#include "Kernel/Substitution.hpp"
+#include "Kernel/Matcher.hpp"
+#include "Kernel/InferenceStore.hpp"
 #include "Kernel/Inference.hpp"
 #include "Kernel/Ordering.hpp"
 #include "Kernel/Term.hpp"
@@ -158,6 +162,29 @@ struct BackwardDemodulation<higherOrder>::ResultFn
     );
     if(env.options->proofExtra() == Options::ProofExtra::FULL)
       env.proofExtra.insert(replacement, new BackwardDemodulationExtra(lhs, lhsS));
+    // record the rewritten literal, and the side of the demodulator used and
+    // its matcher, recovered by matching against the rewritten term
+    if (InferenceStore::recording()) {
+      for (unsigned side = 0; side < 2; side++) {
+        Substitution subst;
+        if (!MatchingUtils::matchTerms(_eqLit->termArg(side), lhsS, subst)) {
+          continue;
+        }
+        if (SubstHelper::apply(_eqLit->termArg(1 - side), subst) != rhsS) {
+          continue;
+        }
+        InferenceStore::instance()->recordPremiseUse(replacement,
+          qr.data->clause, qr.data->literal, lhsS, 0, Substitution());
+        InferenceStore::instance()->recordRewritten(replacement, qr.data->clause,
+          qr.data->literal, resLit,
+          qr.data->literal->isEquality()
+            ? EqHelper::replace(qr.data->literal->termArg(0), lhsS, rhsS)
+            : TermList::empty());
+        InferenceStore::instance()->recordPremiseUse(replacement, _cl, _eqLit,
+          _eqLit->termArg(side), 0, subst);
+        break;
+      }
+    }
     return BwSimplificationRecord(qr.data->clause, replacement);
   }
 private:

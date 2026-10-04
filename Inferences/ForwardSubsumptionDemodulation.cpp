@@ -18,10 +18,13 @@
 #include "Kernel/ColorHelper.hpp"
 #include "Kernel/EqHelper.hpp"
 #include "Kernel/Inference.hpp"
+#include "Kernel/InferenceStore.hpp"
 #include "Kernel/MLMatcherSD.hpp"
 #include "Kernel/Matcher.hpp"
 #include "Kernel/Ordering.hpp"
+#include "Kernel/Substitution.hpp"
 #include "Kernel/Term.hpp"
+#include "Lib/DHSet.hpp"
 #include "Lib/ScopeGuard.hpp"
 #include "Saturation/SaturationAlgorithm.hpp"
 #include <vector>
@@ -593,6 +596,28 @@ isRedundant:
               premises = pvi(getSingletonIterator(mcl));
               replacement = Clause::fromStack(*resLits,
                  SimplifyingInference2(InferenceRule::FORWARD_SUBSUMPTION_DEMODULATION, cl, mcl));
+              // record the rewritten literal, and the equation used with the
+              // matcher found by subsumption
+              if (InferenceStore::recording()) {
+                Substitution theta;
+                DHSet<unsigned, FnvHash, IdentityHash> mclVars;
+                mcl->collectVars(mclVars);
+                for (unsigned v : iterTraits(mclVars.iterator())) {
+                  TermList image = TermList(v, false);
+                  if (binder.isBound(v)) {
+                    image = binder.applyTo(TermList(v, false));
+                  }
+                  theta.bindUnbound(v, image);
+                }
+                InferenceStore::instance()->recordPremiseUse(replacement, cl,
+                  dlit, TermList(lhsS), 0, Substitution());
+                InferenceStore::instance()->recordRewritten(replacement, cl, dlit, newLit,
+                  dlit->isEquality()
+                    ? EqHelper::replace(dlit->termArg(0), TermList(lhsS), rhsS)
+                    : TermList::empty());
+                InferenceStore::instance()->recordPremiseUse(replacement, mcl,
+                  eqLit, lhs, 0, theta);
+              }
 
 #if FSD_LOG_INFERENCES
               std::cout << "\% Begin Inference \"FSD-" << replacement->number() << "\"\n";

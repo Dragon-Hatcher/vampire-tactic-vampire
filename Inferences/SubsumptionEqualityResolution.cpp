@@ -17,6 +17,7 @@
 
 #include "Kernel/Clause.hpp"
 #include "Kernel/Inference.hpp"
+#include "Kernel/InferenceStore.hpp"
 #include "Kernel/RobSubstitution.hpp"
 #include "Kernel/SubstHelper.hpp"
 
@@ -24,6 +25,46 @@
 
 namespace Inferences
 {
+
+/**
+ * Records the unifier for the proof. It is a renaming on the kept literals, so
+ * it is read back through that renaming into the conclusion's variables;
+ * variables only in @b removed are mapped to fresh ones.
+ */
+template<class Unifier>
+static void recordUse(Clause* res, Clause* premise, Literal* removed, Unifier& unifier)
+{
+  if (!InferenceStore::recording()) {
+    return;
+  }
+  DHMap<unsigned, unsigned, FnvHash, IdentityHash> back;
+  DHSet<unsigned, FnvHash, IdentityHash> kept;
+  res->collectVars(kept);
+  unsigned fresh = 0;
+  for (unsigned v : iterTraits(kept.iterator())) {
+    back.set(unifier.apply(v).var(), v);
+    fresh = std::max(fresh, v + 1);
+  }
+  struct Back {
+    DHMap<unsigned, unsigned, FnvHash, IdentityHash>* back;
+    unsigned* fresh;
+    TermList apply(unsigned v) {
+      unsigned w;
+      if (!back->find(v, w)) {
+        w = (*fresh)++;
+        back->insert(v, w);
+      }
+      return TermList(w, false);
+    }
+  } readBack{&back, &fresh};
+  Stack<std::pair<unsigned, TermList>> bindings;
+  DHSet<unsigned, FnvHash, IdentityHash> vars;
+  premise->collectVars(vars);
+  for (unsigned v : iterTraits(vars.iterator()))
+    bindings.push({v, SubstHelper::apply(unifier.apply(v), readBack)});
+  InferenceStore::instance()->recordPremiseUse(res, premise, removed, TermList::empty(), 0,
+    bindings);
+}
 
 Clause* SubsumptionEqualityResolution::simplify(Clause* cl)
 {
@@ -60,7 +101,11 @@ Clause* SubsumptionEqualityResolution::simplify(Clause* cl)
       }
       resLits->push(curr);
     }
-    return Clause::fromStack(*resLits, SimplifyingInference1(InferenceRule::SUBSUMPTION_EQUALITY_RESOLUTION, cl));
+    {
+      Clause* res = Clause::fromStack(*resLits, SimplifyingInference1(InferenceRule::SUBSUMPTION_EQUALITY_RESOLUTION, cl));
+      recordUse(res, cl, lit, unifier);
+      return res;
+    }
 fail:
     continue;
   }
