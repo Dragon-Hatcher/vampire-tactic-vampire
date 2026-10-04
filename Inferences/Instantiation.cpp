@@ -20,6 +20,7 @@
 
 #include "Kernel/Clause.hpp"
 #include "Kernel/Inference.hpp"
+#include "Kernel/InferenceStore.hpp"
 #include "Kernel/SortHelper.hpp"
 #include "Kernel/Substitution.hpp"
 #include "Kernel/SubstHelper.hpp"
@@ -274,7 +275,12 @@ struct Instantiation::ResultFn
       resLits->push(SubstHelper::apply(curr,sub));
     }
 
-    return Clause::fromStack(*resLits,GeneratingInference1(InferenceRule::INSTANTIATION,_cl));
+    Clause* result = Clause::fromStack(*resLits,
+      GeneratingInference1(InferenceRule::INSTANTIATION,_cl));
+    // record the instantiating substitution
+    InferenceStore::instance()->recordPremiseUse(result, _cl, nullptr,
+      TermList::empty(), 0, sub);
+    return result;
   }
 private:
   Clause* _cl;

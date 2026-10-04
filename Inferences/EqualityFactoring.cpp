@@ -20,6 +20,8 @@
 #include "Lib/VirtualIterator.hpp"
 
 #include "Kernel/Clause.hpp"
+#include "Kernel/InferenceStore.hpp"
+#include "Kernel/Substitution.hpp"
 #include "Kernel/EqHelper.hpp"
 #include "Kernel/Inference.hpp"
 #include "Kernel/Ordering.hpp"
@@ -152,9 +154,19 @@ struct EqualityFactoring::ResultFn
       }
     }
 
+    unsigned firstConstraint = resLits->size();
+    unsigned numConstraints = constraints->size();
     resLits->loadFromIterator(constraints->iterFifo());
 
     Clause *cl = Clause::fromStack(*resLits, GeneratingInference1(InferenceRule::EQUALITY_FACTORING, _cl));
+    InferenceStore::instance()->recordConstraints(cl, firstConstraint,
+      numConstraints);
+    // record both equalities with the sides unified, and the unifier
+    if (InferenceStore::recording()) {
+      Substitution s = InferenceStore::bankSubstitution(_cl, absUnif.subs(), 0);
+      InferenceStore::instance()->recordPremiseUse(cl, _cl, sLit, sLHS, 0, s);
+      InferenceStore::instance()->recordPremiseUse(cl, _cl, fLit, fLHS, 0, s);
+    }
     if(env.options->proofExtra() == Options::ProofExtra::FULL)
       env.proofExtra.insert(cl, new EqualityFactoringExtra(sLit, fLit, sLHS, fRHS));
     return cl;

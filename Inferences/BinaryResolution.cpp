@@ -16,6 +16,7 @@
 #include "Debug/TimeProfiling.hpp"
 
 #include "Indexing/ResultSubstitution.hpp"
+#include "Kernel/InferenceStore.hpp"
 #include "Kernel/UnificationWithAbstraction.hpp"
 #include "Lib/Environment.hpp"
 #include "Lib/Metaiterators.hpp"
@@ -142,6 +143,7 @@ Clause* BinaryResolution::generateClause(Clause* queryCl, Literal* queryLit, Cla
     queryLitAfter = subs->applyToQuery(queryLit);
   }
 
+  ASS(resLits->isEmpty())
   resLits->loadFromIterator(constraints->iterFifo());
   for(unsigned i=0;i<clength;i++) {
     Literal* curr=(*queryCl)[i];
@@ -213,6 +215,7 @@ Clause* BinaryResolution::generateClause(Clause* queryCl, Literal* queryLit, Cla
 
   inf_destroyer.disable(); // ownership passed to the the clause below
   Clause *cl = Clause::fromStack(*resLits, inf);
+  InferenceStore::instance()->recordConstraints(cl, 0, nConstraints);
   Literal *qAnsLit, *rAnsLit;
   if ((env.options->questionAnswering() == Options::QuestionAnsweringMode::SYNTHESIS) &&
       (qAnsLit = queryCl->getAnswerLiteral()) && (rAnsLit = resultCl->getAnswerLiteral())) {
@@ -228,6 +231,22 @@ Clause* BinaryResolution::generateClause(Clause* queryCl, Literal* queryLit, Cla
     ));
   } else if (env.options->proofExtra() == Options::ProofExtra::FULL) {
     env.proofExtra.insert(cl, new BinaryResolutionExtra(queryLit, resultLit));
+  }
+
+  // record the unifier applied to each premise
+  if (InferenceStore::recording()) {
+    auto record = [cl](Clause* premise, Literal* on, auto apply) {
+      Stack<std::pair<unsigned, TermList>> bindings;
+      DHSet<unsigned, FnvHash, IdentityHash> vars;
+      premise->collectVars(vars);
+      for (unsigned v : iterTraits(vars.iterator())) {
+        bindings.push({v, apply(TermList(v, false))});
+      }
+      InferenceStore::instance()->recordPremiseUse(cl, premise, on,
+        TermList::empty(), 0, bindings);
+    };
+    record(queryCl, queryLit, [&subs](TermList t) { return subs->applyToQuery(t); });
+    record(resultCl, resultLit, [&subs](TermList t) { return subs->applyToResult(t); });
   }
 
   return cl;

@@ -24,6 +24,8 @@
 #include "Kernel/Clause.hpp"
 #include "Kernel/ColorHelper.hpp"
 #include "Kernel/EqHelper.hpp"
+#include "Kernel/InferenceStore.hpp"
+#include "Kernel/Substitution.hpp"
 #include "Kernel/Inference.hpp"
 #include "Kernel/Ordering.hpp"
 #include "Kernel/SortHelper.hpp"
@@ -381,13 +383,19 @@ Clause* Superposition<higherOrder>::performSuperposition(
 
   res->push(tgtLitS);
   unsigned weight=tgtLitS->weight();
+  // other literals of rwClause changed by simultaneous superposition
+  Stack<std::pair<Literal*, Literal*>> alsoRewritten;
   for(unsigned i=0;i<rwLength;i++) {
     Literal* curr=(*rwClause)[i];
     if(curr!=rwLit) {
       Literal* currAfter = subst->apply(curr, !eqIsResult);
 
       if (doSimS) {
+        Literal* substituted = currAfter;
         currAfter = EqHelper::replace(currAfter,rwTermS,tgtTermS);
+        if (InferenceStore::recording() && currAfter != substituted) {
+          alsoRewritten.push({curr, currAfter});
+        }
       }
 
       if(EqHelper::isEqTautology(currAfter)) {
@@ -460,7 +468,10 @@ Clause* Superposition<higherOrder>::performSuperposition(
       eqClause, rwClause, rwTerm, rwTermS, tgtTermS, eqLHS, rwLitS, eqLit, comp, eqIsResult, subst.ptr());
   }
 
-  res->loadFromIterator(unifier->computeConstraintLiterals()->iter());
+  auto constraints = unifier->computeConstraintLiterals();
+  unsigned firstConstraint = res->size();
+  unsigned numConstraints = constraints->size();
+  res->loadFromIterator(constraints->iter());
 
   if(hasAgeLimitStrike && passiveClauseContainer->exceedsWeightLimit(weight, numPositiveLiteralsLowerBound, inf)) {
     RSTAT_CTR_INC("superpositions skipped for weight limit after the clause was built");
@@ -470,6 +481,8 @@ Clause* Superposition<higherOrder>::performSuperposition(
 
   inf_destroyer.disable(); // ownership passed to the the clause below
   auto clause = Clause::fromStack(*res, inf);
+  InferenceStore::instance()->recordConstraints(clause, firstConstraint,
+    numConstraints);
   Literal *rwAnsLit, *eqAnsLit;
   if ((env.options->questionAnswering() == Options::QuestionAnsweringMode::SYNTHESIS) &&
       (rwAnsLit = rwClause->getAnswerLiteral()) && (eqAnsLit = eqClause->getAnswerLiteral())) {
@@ -489,6 +502,28 @@ Clause* Superposition<higherOrder>::performSuperposition(
       eqLHS,
       rwTerm
     ));
+  }
+
+  // record the rewritten literals, the equation side used, and the unifier
+  if (InferenceStore::recording()) {
+    auto record = [&](Clause* premise, Literal* on, TermList term,
+                      bool isResult, unsigned flags) {
+      InferenceStore::instance()->recordPremiseUse(clause, premise, on, term,
+        flags, InferenceStore::bankSubstitution(premise, *subst, isResult));
+    };
+    record(rwClause, rwLit, rwTerm, !eqIsResult,
+      doSimS ? InferenceStore::rewritesWholePremise : 0);
+    auto rewritten = [&](Literal* from, Literal* to) {
+      TermList lhs = from->isEquality()
+        ? EqHelper::replace(subst->apply(from->termArg(0), !eqIsResult), rwTermS, tgtTermS)
+        : TermList::empty();
+      InferenceStore::instance()->recordRewritten(clause, rwClause, from, to, lhs);
+    };
+    rewritten(rwLit, tgtLitS);
+    for (auto [from, to] : iterTraits(alsoRewritten.iter())) {
+      rewritten(from, to);
+    }
+    record(eqClause, eqLit, eqLHS, eqIsResult, 0);
   }
 
   return clause;

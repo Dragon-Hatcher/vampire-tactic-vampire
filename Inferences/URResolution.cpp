@@ -13,6 +13,7 @@
  */
 
 #include "Lib/DArray.hpp"
+#include "Lib/DHSet.hpp"
 #include "Lib/Metaiterators.hpp"
 #include "Lib/VirtualIterator.hpp"
 
@@ -20,6 +21,10 @@
 #include "Kernel/ColorHelper.hpp"
 #include "Kernel/Renaming.hpp"
 #include "Kernel/Inference.hpp"
+#include "Kernel/InferenceStore.hpp"
+#include "Kernel/SubstHelper.hpp"
+#include "Kernel/Substitution.hpp"
+#include "Kernel/TermIterators.hpp"
 
 #include "Indexing/Index.hpp"
 
@@ -50,6 +55,29 @@ URResolution<synthesis>::URResolution(SaturationAlgorithm& salg)
   ASS_NEQ(salg.getOptions().unitResultingResolution(),  Options::URResolution::OFF);
 }
 
+/** Composes @b s with what @b u does to the bank @b bank. */
+static void composeInto(Substitution& s, ResultSubstitution* u, bool bank)
+{
+  Stack<std::pair<unsigned, TermList>> items;
+  for (auto item : iterTraits(s.items())) {
+    items.push(item);
+  }
+  for (auto [v, t] : items) {
+    s.rebind(v, u->apply(t, bank));
+  }
+}
+
+/** Makes @b s the identity on @b cl's variables. */
+static void identityOn(Substitution& s, Clause* cl)
+{
+  s.reset();
+  DHSet<unsigned, FnvHash, IdentityHash> vars;
+  cl->collectVars(vars);
+  for (unsigned v : iterTraits(vars.iterator())) {
+    s.bindUnbound(v, TermList(v, false));
+  }
+}
+
 template<bool synthesis>
 struct URResolution<synthesis>::Item
 {
@@ -72,6 +100,15 @@ struct URResolution<synthesis>::Item
       }
     }
     _atMostOneNonGround = nonGroundCnt<=1;
+    if (_recording) {
+      identityOn(_origSubst, cl);
+      _premiseSubsts.ensure(litslen);
+      // literals get reordered, so remember their original positions
+      _origIndex.ensure(litslen);
+      for (unsigned i = 0; i < litslen; i++) {
+        _origIndex[i] = i;
+      }
+    }
 
     _activeLength = selectedOnly ? cl->numSelected() : litslen;
     ASS_REP2(_activeLength>=litslen-1, cl->toString(), cl->numSelected());
@@ -89,6 +126,17 @@ struct URResolution<synthesis>::Item
     Literal* rlit = _lits[idx];
     _lits[idx] = 0;
     _premises[idx] = premise;
+    // compose the unifier into the substitutions recorded so far
+    if (_recording) {
+      composeInto(_origSubst, unif.unifier.ptr(), !useQuerySubstitution);
+      for (unsigned i = 0; i < _premiseSubsts.size(); i++) {
+        if (_premises[i] && i != idx) {
+          composeInto(_premiseSubsts[i], unif.unifier.ptr(), !useQuerySubstitution);
+        }
+      }
+      identityOn(_premiseSubsts[idx], premise);
+      composeInto(_premiseSubsts[idx], unif.unifier.ptr(), useQuerySubstitution);
+    }
     _color = static_cast<Color>(_color | premise->color());
     ASS_NEQ(_color, COLOR_INVALID)
 
@@ -155,14 +203,56 @@ struct URResolution<synthesis>::Item
     Clause* res;
 
     LiteralIterator it = _ansLit ? pvi(getSingletonIterator(_ansLit)) : LiteralIterator::getEmpty();
+    // the recorded substitutions are normalised like the surviving literal
+    Renaming norm;
+    bool renamed = false;
     if(single) {
       if (!_ansLit || _ansLit->ground()) {
-        single = Renaming::normalize(single);
+        norm.normalizeVariables(single);
+        single = norm.apply(single);
+        renamed = true;
       }
       res = Clause::fromIterator(concatIters(getSingletonIterator(single), std::move(it)), inf);
     }
     else {
       res = Clause::fromIterator(std::move(it), inf);
+    }
+
+    // variables not in the surviving literal are numbered after its own
+    auto normalised = [&norm, renamed](Substitution& s) {
+      Substitution renaming;
+      Stack<std::pair<unsigned, TermList>> items;
+      for (auto item : iterTraits(s.items())) {
+        items.push(item);
+      }
+      for (auto [v0, t] : items) {
+        VariableIterator vit(t);
+        while (vit.hasNext()) {
+          unsigned v = vit.next().var();
+          TermList bound;
+          if (renamed && !renaming.findBinding(v, bound)) {
+            renaming.bindUnbound(v, TermList(norm.getOrBind(v), false));
+          }
+        }
+      }
+      Stack<std::pair<unsigned, TermList>> out;
+      for (auto [v, t] : items) {
+        out.push({v, SubstHelper::apply(t, renaming)});
+      }
+      return out;
+    };
+    // record the clause, then each unit with the literal it resolved away
+    if (_recording) {
+      InferenceStore::instance()->recordPremiseUse(res, _orig, TermList::empty(),
+        0, normalised(const_cast<Item*>(this)->_origSubst));
+      for (unsigned i = _premiseSubsts.size(); i-- > 0; ) {
+        if (!_premises[i]) {
+          continue;
+        }
+        InferenceStore::instance()->recordPremiseUse(res, _premises[i],
+          (*_orig)[_origIndex[i]], TermList::empty(), 0,
+          normalised(const_cast<Item*>(this)->_premiseSubsts[i]), _orig);
+      }
     }
     return res;
   }
@@ -201,6 +291,9 @@ struct URResolution<synthesis>::Item
     }
     if(idx!=bestIdx) {
       swap(_lits[idx], _lits[bestIdx]);
+      if (_recording) {
+        swap(_origIndex[idx], _origIndex[bestIdx]);
+      }
     }
   }
 
@@ -217,6 +310,14 @@ struct URResolution<synthesis>::Item
 
   /** Premises used to resolve away particular literals */
   DArray<Clause*> _premises;
+  /**
+   * For the proof: the substitutions applied to the clause and to each
+   * premise, and the original position of each literal
+   */
+  bool _recording = InferenceStore::recording();
+  Substitution _origSubst;
+  DArray<Substitution> _premiseSubsts;
+  DArray<unsigned> _origIndex;
 
   /** Unresolved literals, or zeroes at positions of the resolved ones
    *
@@ -344,6 +445,9 @@ void URResolution<synthesis>::doBackwardInferences(Clause* cl, ClauseList*& acc)
     }
     ASS(!_selectedOnly || pos<ucl->numSelected());
     swap(itm->_lits[0], itm->_lits[pos]);
+    if (itm->_recording) {
+      swap(itm->_origIndex[0], itm->_origIndex[pos]);
+    }
     itm->resolveLiteral(0, unif, cl, /* useQuerySubstitution */ false);
 
     processAndGetClauses(itm, 1, acc);

@@ -18,6 +18,8 @@
 #include "Lib/VirtualIterator.hpp"
 
 #include "Kernel/Clause.hpp"
+#include "Kernel/InferenceStore.hpp"
+#include "Kernel/Substitution.hpp"
 #include "Kernel/Inference.hpp"
 #include "Kernel/RobSubstitution.hpp"
 #include "Kernel/SortHelper.hpp"
@@ -221,7 +223,15 @@ Clause* ExtensionalityResolution::performExtensionalityResolution(
     }
   }
 
-  return Clause::fromStack(*resLits, GeneratingInference2(InferenceRule::EXTENSIONALITY_RESOLUTION, extCl, otherCl));
+  Clause* res = Clause::fromStack(*resLits, GeneratingInference2(InferenceRule::EXTENSIONALITY_RESOLUTION, extCl, otherCl));
+  // record the resolved literals and the unifier
+  if (InferenceStore::recording()) {
+    InferenceStore::instance()->recordPremiseUse(res, extCl, extLit, TermList::empty(), 0,
+      InferenceStore::bankSubstitution(extCl, *subst, 0));
+    InferenceStore::instance()->recordPremiseUse(res, otherCl, otherLit, TermList::empty(), 0,
+      InferenceStore::bankSubstitution(otherCl, *subst, 1));
+  }
+  return res;
 }
   
 /**

@@ -16,6 +16,8 @@
 #include "Lib/Metaiterators.hpp"
 #include "Lib/Stack.hpp"
 
+#include "Kernel/InferenceStore.hpp"
+#include "Kernel/Substitution.hpp"
 #include "Lib/Environment.hpp"
 #include "Shell/Options.hpp"
 
@@ -73,10 +75,19 @@ Clause* unifierToClause(Clause* cl, Literal* lit, AbstractingUnifier* unif, cons
   }
 
   auto constraints = unif->computeConstraintLiterals();
+  unsigned firstConstraint = resLits->size();
+  unsigned numConstraints = constraints->size();
   resLits->loadFromIterator(constraints->iterFifo());
   auto res = Clause::fromStack(*resLits, GeneratingInference1(InferenceRule::EQUALITY_RESOLUTION, cl));
+  InferenceStore::instance()->recordConstraints(res, firstConstraint,
+    numConstraints);
   if(env.options->proofExtra() == Options::ProofExtra::FULL)
     env.proofExtra.insert(res, new EqualityResolutionExtra(lit));
+  // record the resolved literal and the unifier
+  if (InferenceStore::recording()) {
+    InferenceStore::instance()->recordPremiseUse(res, cl, lit, TermList::empty(), 0,
+      InferenceStore::bankSubstitution(cl, unif->subs(), kVarBank));
+  }
   return res;
 }
 
