@@ -20,11 +20,22 @@
 
 #include "Lib/DHMap.hpp"
 
+namespace Kernel {
+struct Provenance;
+}
+
 namespace Lib {
 
 // base for extra inference information
 struct InferenceExtra {
-  virtual ~InferenceExtra() {};
+  // deletes provenance, defined in InferenceStore.cpp
+  virtual ~InferenceExtra();
+
+  // what the inference did to its premises, see InferenceStore; owned, may be null
+  Kernel::Provenance *provenance = nullptr;
+
+  // whether this extra holds nothing but its provenance
+  virtual bool onlyProvenance() const { return false; }
 
   // for debug printing only, specific output formats should downcast and handle individually
   virtual void output(std::ostream &out) const = 0;
@@ -41,14 +52,39 @@ inline std::ostream &operator<<(std::ostream &out, const InferenceExtra &extra) 
   return out;
 }
 
+// extra holding only provenance
+struct ProvenanceExtra : public InferenceExtra {
+  void output(std::ostream &out) const override {}
+  bool onlyProvenance() const override { return true; }
+};
+
 // container for extras
 class ProofExtra {
   DHMap<Kernel::Unit *, std::unique_ptr<InferenceExtra>, UnitHash, UnitNumberHash> extras;
 
 public:
-  // associate `extra` with `unit`, taking ownership of `extra`
+  // associate `extra` with `unit`, taking ownership of `extra`;
+  // an extra of `unit` holding only provenance is replaced, passing it on to `extra`
   void insert(Kernel::Unit *unit, InferenceExtra *extra) {
+    if (auto *found = extras.findPtr(unit)) {
+      ASS((*found)->onlyProvenance())
+      if (!extra->provenance) {
+        extra->provenance = (*found)->provenance;
+        (*found)->provenance = nullptr;
+      }
+      *found = std::unique_ptr<InferenceExtra>(extra);
+      return;
+    }
     ALWAYS(extras.insert(unit, std::unique_ptr<InferenceExtra>(extra)));
+  }
+
+  // the provenance of `unit`, created if there is none
+  Kernel::Provenance &provenance(Kernel::Unit *unit);
+
+  // the provenance of `unit`, or null
+  const Kernel::Provenance *findProvenance(const Kernel::Unit *unit) {
+    auto *found = find(unit);
+    return found ? found->provenance : nullptr;
   }
 
   // remove the extra information for this unit

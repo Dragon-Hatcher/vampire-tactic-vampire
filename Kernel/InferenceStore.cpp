@@ -29,6 +29,8 @@
 
 #include "Parse/TPTP.hpp"
 
+#include "SATSubsumption/SATSubsumptionAndResolution.hpp"
+
 #include "Saturation/Splitter.hpp"
 
 #include "HOL/HOL.hpp"
@@ -42,6 +44,8 @@
 #include "SortHelper.hpp"
 
 #include "InferenceStore.hpp"
+#include "SubstHelper.hpp"
+#include "Substitution.hpp"
 #include "Term.hpp"
 #include "TermIterators.hpp"
 #include "Theory.hpp"
@@ -51,6 +55,23 @@
 #include<string>
 #include<vector>
 //TODO: when we delete clause, we should also delete all its records from the inference store
+
+namespace Lib {
+
+InferenceExtra::~InferenceExtra() { delete provenance; }
+
+Kernel::Provenance& ProofExtra::provenance(Kernel::Unit* unit)
+{
+  std::unique_ptr<InferenceExtra>* found;
+  if (extras.getValuePtr(unit, found))
+    *found = std::make_unique<ProvenanceExtra>();
+  if (!(*found)->provenance)
+    (*found)->provenance = new Kernel::Provenance();
+  return *(*found)->provenance;
+}
+
+}
+
 
 namespace Kernel
 {
@@ -68,6 +89,25 @@ void InferenceStore::recordSplittingNameLiteral(Unit* us, Literal* lit)
   ALWAYS(_splittingNameLiterals.insert(us->number(), lit));
 }
 
+Literal* InferenceStore::splittingNameLiteral(Unit* us) const
+{
+  Literal* lit = nullptr;
+  return _splittingNameLiterals.find(us->number(), lit) ? lit : nullptr;
+}
+
+void InferenceStore::recordPureStage(Unit* u)
+{
+  if (!recording()) return;
+  env.proofExtra.provenance(u).pureStage = _purePredicates.size();
+}
+
+bool InferenceStore::pureStage(Unit* u, unsigned& stage) const
+{
+  const Provenance* p = env.proofExtra.findProvenance(u);
+  if (!p || !p->pureStage) return false;
+  stage = *p->pureStage;
+  return true;
+}
 
 /**
  * Record the introduction of a new symbol
@@ -92,12 +132,311 @@ void InferenceStore::recordIntroducedSkolemSymbol(Unit* u, const Signature::Symb
   pStack->emplace(sym);
 }
 
+void InferenceStore::recordPremiseUse(Unit* generated, Unit* premise,
+  TermList term, unsigned flags,
+  const Stack<std::pair<unsigned, TermList>>& bindings)
+{
+  if (!recording()) return;
+  env.proofExtra.provenance(generated).uses.push(
+    {premise->number(), nullptr, nullptr, term, flags, bindings});
+}
+
+void InferenceStore::recordPremiseUse(Unit* generated, Clause* premise,
+  Literal* on, TermList term, unsigned flags,
+  const Stack<std::pair<unsigned, TermList>>& bindings, Clause* in)
+{
+  if (!recording()) return;
+  env.proofExtra.provenance(generated).uses.push(
+    {premise->number(), on ? (in ? in : premise) : nullptr, on, term, flags, bindings});
+}
+
+void InferenceStore::recordPremiseUse(Unit* generated, Clause* premise,
+  Literal* on, TermList term, unsigned flags, const Substitution& subst)
+{
+  if (!recording()) return;
+  Stack<std::pair<unsigned, TermList>> bindings;
+  DHSet<unsigned, FnvHash, IdentityHash> vars;
+  premise->collectVars(vars);
+  for (unsigned v : iterTraits(vars.iterator())) {
+    bindings.push({v, subst.apply(v)});
+  }
+  recordPremiseUse(generated, premise, on, term, flags, bindings);
+}
+
+void InferenceStore::recoverSubsumptionResolutionUses(Unit* u)
+{
+  if (premiseUses(u) || !u->isClause()) {
+    return;
+  }
+  Clause* conclusion = u->asClause();
+  Inference& inference = u->inference();
+  Inference::Iterator it = inference.iterator();
+  if (!inference.hasNext(it)) {
+    return;
+  }
+  Unit* first = inference.next(it);
+  if (!inference.hasNext(it)) {
+    return;
+  }
+  Unit* second = inference.next(it);
+  if (inference.hasNext(it) || !first->isClause() || !second->isClause()) {
+    return;
+  }
+  Clause* main = first->asClause();
+  Clause* side = second->asClause();
+
+  Literal* removed = nullptr;
+  for (unsigned i = 0; i < main->length(); i++) {
+    Literal* literal = (*main)[i];
+    bool kept = false;
+    for (unsigned j = 0; j < conclusion->length(); j++) {
+      if ((*conclusion)[j] == literal) {
+        kept = true;
+        break;
+      }
+    }
+    if (!kept) {
+      if (removed) {
+        return;
+      }
+      removed = literal;
+    }
+  }
+  if (!removed) {
+    return;
+  }
+
+  SATSubsumption::SATSubsumptionAndResolution satSR;
+  if (!satSR.checkSubsumptionResolutionWithLiteral(side, main,
+        main->getLiteralPosition(removed))) {
+    return;
+  }
+  Substitution subst = satSR.getBindingsForSubsumptionResolutionWithLiteral();
+  // only the side premise is instantiated
+  recordPremiseUse(u, main, removed, TermList::empty(), 0, Substitution());
+  recordPremiseUse(u, side, nullptr, TermList::empty(), 0, subst);
+}
+
+void InferenceStore::recordRewritten(Unit* generated, Unit* premise, Literal* from,
+  Literal* to, TermList rewrittenLhs)
+{
+  if (!recording()) return;
+  bool turned = to->isEquality() && *to->nthArgument(0) != rewrittenLhs;
+  lastUse(generated, premise).rewritten.push({from, to, turned});
+}
+
+InferenceStore::PremiseUse& InferenceStore::lastUse(Unit* generated, Unit* premise)
+{
+  Stack<PremiseUse>& uses = env.proofExtra.provenance(generated).uses;
+  for (unsigned i = uses.size(); i-- > 0;) {
+    PremiseUse& use = uses[i];
+    if (use.premise == premise->number())
+      return use;
+  }
+  ASSERTION_VIOLATION;
+  return uses[0];
+}
+
+void InferenceStore::recordFactor(Unit* generated, Unit* premise, TermList factor)
+{
+  if (!recording()) return;
+  lastUse(generated, premise).factor = factor;
+}
+
+void InferenceStore::recordOther(Unit* generated, Unit* premise, TermList other)
+{
+  if (!recording()) return;
+  lastUse(generated, premise).other = other;
+}
+
+void InferenceStore::recordNegated(Unit* generated, Unit* premise)
+{
+  if (!recording()) return;
+  lastUse(generated, premise).flags |= PremiseUse::negatedFlag;
+}
+
+void InferenceStore::recordConstraints(Clause* generated, unsigned first,
+  unsigned count)
+{
+  if (!recording() || !count)
+    return;
+  Stack<Literal*> literals(count);
+  for (unsigned i = first; i < first + count; i++)
+    literals.push((*generated)[i]);
+  env.proofExtra.provenance(generated).constraints = std::move(literals);
+}
+
+void InferenceStore::recordAbstraction(Clause* generated, Clause* premise,
+  const Stack<Literal*>& abstractions,
+  const Stack<std::pair<Literal*, Literal*>>& rewritten, unsigned firstNewVar)
+{
+  if (!recording()) return;
+  recordPremiseUse(generated, premise, nullptr, TermList::empty(), 0, Substitution());
+  // the variable of each disequality is its side that is a fresh variable
+  Stack<std::pair<unsigned, Literal*>> byVar;
+  Substitution undo;
+  for (Literal* d : iterTraits(abstractions.iterFifo())) {
+    TermList a = *d->nthArgument(0);
+    TermList b = *d->nthArgument(1);
+    TermList x = a.isVar() && a.var() >= firstNewVar ? a : b;
+    TermList t = x == a ? b : a;
+    ASS(x.isVar() && x.var() >= firstNewVar);
+    byVar.push({x.var(), d});
+    undo.bindUnbound(x.var(), t);
+  }
+  std::sort(byVar.begin(), byVar.end(),
+    [](auto const& l, auto const& r) { return l.first < r.first; });
+  Stack<Literal*> ordered;
+  for (auto [_, d] : iterTraits(byVar.iterFifo()))
+    ordered.push(d);
+  recordIntroduced(generated, ordered);
+  // undo abstractions in t, repeatedly, as abstracted terms may be nested
+  auto undone = [&](TermList t) {
+    for (unsigned i = 0; i <= abstractions.size(); i++) {
+      TermList u = SubstHelper::apply(t, undo);
+      if (u == t)
+        break;
+      t = u;
+    }
+    return t;
+  };
+  for (auto [from, to] : iterTraits(rewritten.iterFifo())) {
+    TermList lhs = TermList::empty();
+    if (to->isEquality())
+      lhs = undone(*to->nthArgument(0)) == *from->nthArgument(0)
+        ? *to->nthArgument(0) : *to->nthArgument(1);
+    recordRewritten(generated, premise, from, to, lhs);
+  }
+}
+
+void InferenceStore::recordIntroduced(Clause* generated,
+  const Stack<Literal*>& literals, unsigned variant, const Stack<Literal*>& sources,
+  const Stack<TermList>& terms)
+{
+  if (!recording()) return;
+  ASS(sources.isEmpty() || sources.size() == literals.size());
+  // at most one record per clause
+  auto& introduced = env.proofExtra.provenance(generated).introduced;
+  ALWAYS(!introduced);
+  introduced = Introduced{literals, variant, sources, terms};
+}
+
+const InferenceStore::Introduced* InferenceStore::introduced(Unit* u) const
+{
+  const Provenance* p = env.proofExtra.findProvenance(u);
+  return p && p->introduced ? &*p->introduced : nullptr;
+}
+
+void InferenceStore::recordLiteralImages(Unit* generated,
+  LiteralProcedure procedure, Stack<LiteralImage> images)
+{
+  if (!recording()) return;
+  env.proofExtra.provenance(generated).literalImages =
+    LiteralRewriting{procedure, std::move(images)};
+}
+
+const InferenceStore::LiteralRewriting* InferenceStore::literalImages(Unit* u) const
+{
+  const Provenance* p = env.proofExtra.findProvenance(u);
+  return p && p->literalImages ? &*p->literalImages : nullptr;
+}
+
+const Stack<Literal*>* InferenceStore::constraints(Unit* u) const
+{
+  const Provenance* p = env.proofExtra.findProvenance(u);
+  return p && p->constraints.isNonEmpty() ? &p->constraints : nullptr;
+}
+
+const Stack<InferenceStore::PremiseUse>* InferenceStore::premiseUses(Unit* u) const
+{
+  const Provenance* p = env.proofExtra.findProvenance(u);
+  return p && p->uses.isNonEmpty() ? &p->uses : nullptr;
+}
+
+unsigned InferenceStore::newGenClauseState(GenClauseState state)
+{
+  _genClauseStates.push(std::move(state));
+  return _genClauseStates.size() - 1;
+}
+
+const InferenceStore::GenClauseState* InferenceStore::genClauseState(unsigned id) const
+{
+  if (id >= _genClauseStates.size()) {
+    return nullptr;
+  }
+  return &_genClauseStates[id];
+}
+
+void InferenceStore::recordGenClauseOfClause(Unit* clause, unsigned state)
+{
+  if (!recording()) return;
+  env.proofExtra.provenance(clause).genClause = state;
+}
+
+unsigned InferenceStore::genClauseOfClause(Unit* clause) const
+{
+  const Provenance* p = env.proofExtra.findProvenance(clause);
+  return p ? p->genClause : stateNone;
+}
+
+void InferenceStore::recordConjunctChoices(Unit* clause,
+  const Stack<std::pair<Formula*, unsigned>>& choices)
+{
+  if (!recording()) return;
+  env.proofExtra.provenance(clause).conjunctChoices = choices;
+}
+
+const Stack<std::pair<Formula*, unsigned>>*
+InferenceStore::conjunctChoices(Unit* clause) const
+{
+  const Provenance* p = env.proofExtra.findProvenance(clause);
+  return p && p->conjunctChoices.isNonEmpty() ? &p->conjunctChoices : nullptr;
+}
+
+void InferenceStore::recordIntroducedNaming(Unit* u, const Signature::Symbol* sym,
+  const Stack<unsigned>& arguments, Formula* named)
+{
+  if (!recording()) return;
+  env.proofExtra.provenance(u).namings.push({sym, arguments, named});
+}
+
+const Stack<InferenceStore::Naming>* InferenceStore::namings(Unit* u) const
+{
+  const Provenance* p = env.proofExtra.findProvenance(u);
+  return p && p->namings.isNonEmpty() ? &p->namings : nullptr;
+}
+
+void InferenceStore::introducedSkolems(Unit* u,
+  Stack<std::tuple<const Signature::Symbol*, unsigned, Term*>>& out) const
+{
+  const SymbolStack* symbols = _introducedSymbols.findPtr(u->number());
+  if (!symbols) {
+    return;
+  }
+  for (const Signature::Symbol* sym : *symbols) {
+    unsigned replacedVar;
+    Term* symTerm;
+    if (_introducedSymbolReplacedVars.find(sym, replacedVar) &&
+        _introducedSkolemSymTerms.find(sym, symTerm)) {
+      out.push({sym, replacedVar, symTerm});
+    }
+  }
+}
+
 /**
  * Record the introduction of a split name
  */
 void InferenceStore::recordIntroducedSplitName(Unit* u, std::string name)
 {
   ALWAYS(_introducedSplitNames.insert(u->number(),name));
+  if (recording())
+    _splitDefinitions[name] = u;
+}
+
+Unit* InferenceStore::splitDefinition(const std::string& name) const
+{
+  auto found = _splitDefinitions.find(name);
+  return found == _splitDefinitions.end() ? nullptr : found->second;
 }
 
 /**
@@ -276,7 +615,8 @@ protected:
 
       if(env.options->proofExtra() == Options::ProofExtra::FULL) {
         auto *extra = env.proofExtra.find(cs);
-        if(extra)
+        // skip an extra holding only provenance
+        if(extra && !extra->toString().empty())
           out
             << (first ? ' ' : ',')
             << *extra;
