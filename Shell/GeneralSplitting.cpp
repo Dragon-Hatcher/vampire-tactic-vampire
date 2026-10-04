@@ -251,6 +251,8 @@ bool GeneralSplitting::apply(Clause*& cl, UnitList*& resultStack)
 
   Clause* otherCl=Clause::fromStack(otherLits, NonspecificInference2(InferenceRule::GENERAL_SPLITTING, cl, mdvCl));
   otherCl->setAge(cl->age());
+  // record the name literal, as literal selection may reorder the clause
+  InferenceStore::instance()->recordSplittingNameLiteral(otherCl, nnLit);
 
   cl=otherCl;
 

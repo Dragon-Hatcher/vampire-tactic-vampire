@@ -98,6 +98,8 @@ private:
 
   typedef DHMap<int, Def*, IdentityHash, FnvHash> Fn2DefMap;
   Fn2DefMap _defs;
+  /** the unfolded first argument of the literal last rebuilt by applyDefinitions(Literal*) */
+  TermList _unfoldedLhs;
 
   /** stack where definitions are put when they're marked as blocked */
   Stack<Def*> _blockedDefs;

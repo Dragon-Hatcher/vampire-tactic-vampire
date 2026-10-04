@@ -67,6 +67,9 @@ class Definizator : public BottomUpTermTransformer {
     DHMap<Term*,std::pair<unsigned,Clause*>, FnvHash, PtrIdentityHash> _cache;
 
     Definizator(bool groundOnly) : newUnits(UnitList::empty()), _groundOnly(groundOnly) {}
+    /** folds @b t and its subterms, as transformLiteral does for its arguments */
+    TermList transformTerm(TermList t)
+    { return transformSubterm(t.isTerm() ? TermList(transform(t.term())) : t); }
   private:
     bool _groundOnly;
 
@@ -235,17 +238,36 @@ void Shell::TweeGoalTransformation::apply(Problem &prb, bool groundOnly)
     df.premises = UnitList::empty(); // will get filled as we traverse and rewrite
 
     newLits.reset();
+    // folded literals with their folded first argument, as sharing may swap an
+    // equation's sides
+    Stack<std::tuple<Literal*, Literal*, TermList>> folded;
     for (unsigned i = 0; i < c->size(); i++) {
       Literal* l = c->literals()[i];
       // cout << "L: " << l->toString() << endl;
       Literal* nl = df.transformLiteral(l);
       // cout << "NL: " << nl->toString() << endl;
       newLits.push(nl);
+      if (nl != l && InferenceStore::recording()) {
+        TermList lhs = TermList::empty();
+        if (l->isEquality()) {
+          // the definitions are cached, but their premises would be added again
+          UnitList* premises = df.premises;
+          lhs = df.transformTerm(*l->nthArgument(0));
+          while (df.premises != premises) {
+            UnitList::pop(df.premises);
+          }
+        }
+        folded.push({l, nl, lhs});
+      }
     }
     if (df.premises) {
       UnitList::push(c,df.premises);
       Clause* nc = Clause::fromStack(newLits,
         FormulaClauseTransformationMany(InferenceRule::DEFINITION_FOLDING,df.premises));
+      InferenceStore::instance()->recordPremiseUse(nc, c, TermList::empty(), 0,
+        Stack<std::pair<unsigned, TermList>>());
+      for (auto [from, to, lhs] : folded)
+        InferenceStore::instance()->recordRewritten(nc, c, from, to, lhs);
       u = nc; // replace the original in the Problem's list
     }
   }

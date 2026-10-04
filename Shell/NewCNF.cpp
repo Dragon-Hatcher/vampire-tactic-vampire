@@ -760,7 +760,7 @@ void NewCNF::processLet(Term* term, Occurrences &occurrences)
   // should be read "de-let-ed contents"
   Formula* deletedContentsFormula = BoolTermFormula::create(eliminateLet(term));
 
-  occurrences.replaceBy(deletedContentsFormula);
+  occurrences.replaceBy(deletedContentsFormula, this);
 
   enqueue(deletedContentsFormula, occurrences);
 }
@@ -999,6 +999,9 @@ Term* NewCNF::createSkolemTerm(unsigned var, VarSet* free)
     auto symbol = Skolem::addSkolemFunction(taArity, *termVarSorts, rangeSort)->markSkipCongruence();
     unsigned fun = symbol->number();
     res = Term::create(fun, arity, args.begin());
+    // there is no separate skolemisation step, so record it against the unit
+    InferenceStore::instance()->recordIntroducedSkolemSymbol(
+      _beingClausified, symbol, var, res);
   }
 
 
@@ -1147,7 +1150,7 @@ void NewCNF::process(QuantifiedFormula* g, Occurrences &occurrences)
   enqueue(g->qarg(), occurrences);
 
   // Correct all the GenClauses to mention qarg instead of g
-  occurrences.replaceBy(g->qarg());
+  occurrences.replaceBy(g->qarg(), this);
 }
 
 void NewCNF::processBoolterm(TermList ts, Occurrences &occurrences)
@@ -1164,7 +1167,7 @@ void NewCNF::processBoolterm(TermList ts, Occurrences &occurrences)
   if (!term->isSpecial()) {
     auto f = new AtomicFormula(Literal::createEquality(true, ts, TermList(Term::foolTrue()), AtomicSort::boolSort()));
     enqueue(f, occurrences);
-    occurrences.replaceBy(f);
+    occurrences.replaceBy(f, this);
     return;
   }
 
@@ -1263,8 +1266,19 @@ void NewCNF::nameSubformula(Formula* g, Occurrences &occurrences)
   Literal* naming = createNamingLiteral(g, fv);
   Formula* name = new AtomicFormula(naming);
   env.statistics->formulaNames++;
+  // the definition of the name is not a separate unit, so record it here
+  if (InferenceStore::recording()) {
+    Stack<unsigned> arguments;
+    for (unsigned i = 0; i < naming->arity(); i++) {
+      TermList argument = *naming->nthArgument(i);
+      ASS(argument.isVar());
+      arguments.push(argument.var());
+    }
+    InferenceStore::instance()->recordIntroducedNaming(_beingClausified,
+      env.signature->getPredicate(naming->functor()), arguments, g);
+  }
 
-  occurrences.replaceBy(name);
+  occurrences.replaceBy(name, this, /*named=*/true);
 
   enqueue(g);
 
@@ -1461,6 +1475,7 @@ void NewCNF::toClauses(SPGenClause gc, Stack<Clause*>& output)
     SPGenClause genClause = makeGenClause(gls, gc->bindings, BindingList::empty());
     if (genClause->valid) {
       Clause* clause = toClause(genClause);
+      InferenceStore::instance()->recordGenClauseOfClause(clause, gc->state);
       LOG1(clause->toString());
       output.push(clause);
     } else {

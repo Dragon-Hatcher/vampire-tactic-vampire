@@ -25,6 +25,7 @@
 #include "Lib/ScopedLet.hpp"
 
 #include "Kernel/Clause.hpp"
+#include "Kernel/InferenceStore.hpp"
 #include "Kernel/Formula.hpp"
 #include "Kernel/Inference.hpp"
 #include "Kernel/FormulaUnit.hpp"
@@ -702,6 +703,7 @@ Term* FunctionDefinition::applyDefinitions(Literal* lit, Stack<Def*>* usedDefs)
   //second topmost element as &top()-1, third at
   //&top()-2, etc...
   TermList* argLst=&args.top() - (lit->arity()-1);
+  _unfoldedLhs = argLst[0];
   return Literal::create(static_cast<Literal*>(lit),argLst);
 }
 
@@ -715,11 +717,16 @@ Clause* FunctionDefinition::applyDefinitions(Clause* cl)
   ASS(usedDefs.isEmpty());
 
   bool modified=false;
+  // rewritten literals with their unfolded first argument, as sharing may
+  // swap an equation's sides
+  Stack<std::tuple<Literal*, Literal*, TermList>> rewritten;
   for(unsigned i=0;i<clen;i++) {
     Literal* lit=(*cl)[i];
     Literal* rlit=static_cast<Literal*>(applyDefinitions(lit, &usedDefs));
     resLits->push(rlit);
     modified|= rlit!=lit;
+    if (rlit != lit && InferenceStore::recording())
+      rewritten.push({lit, rlit, _unfoldedLhs});
   }
   if(!modified) {
     ASS(usedDefs.isEmpty());
@@ -728,16 +735,29 @@ Clause* FunctionDefinition::applyDefinitions(Clause* cl)
 
   UnitList* premises=0;
   std::vector<Term *> extra;
+  // the defined side of each definition used
+  Stack<std::pair<Unit*, Term*>> defined;
   while(usedDefs.isNonEmpty()) {
     Def *def = usedDefs.pop();
     Clause* defCl=def->defCl;
     UnitList::push(defCl, premises);
+    if (InferenceStore::recording())
+      defined.push({defCl, def->lhs});
     if(env.options->proofExtra() == Options::ProofExtra::FULL)
       extra.push_back(def->lhs);
   }
   std::reverse(extra.begin(), extra.end());
   UnitList::push(cl, premises);
   auto res = Clause::fromStack(*resLits, NonspecificInferenceMany(InferenceRule::DEFINITION_UNFOLDING, premises));
+  // the unfolded clause must be recorded first
+  InferenceStore::instance()->recordPremiseUse(res, cl, TermList::empty(), 0,
+    Stack<std::pair<unsigned, TermList>>());
+  for (auto [from, to, lhs] : rewritten)
+    InferenceStore::instance()->recordRewritten(res, cl, from, to, lhs);
+  for (auto [defCl, lhs] : defined) {
+    InferenceStore::instance()->recordPremiseUse(res, defCl, TermList(lhs), 0,
+      Stack<std::pair<unsigned, TermList>>());
+  }
   if(env.options->proofExtra() == Options::ProofExtra::FULL)
     env.proofExtra.insert(res, new FunctionDefinitionExtra(std::move(extra)));
   res->setAge(cl->age()); // TODO isn't this dones automatically?

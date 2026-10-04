@@ -16,6 +16,7 @@
 
 
 #include "Kernel/Clause.hpp"
+#include "Kernel/InferenceStore.hpp"
 #include "Kernel/Formula.hpp"
 #include "Kernel/Inference.hpp"
 #include "Kernel/FormulaUnit.hpp"
@@ -146,6 +147,10 @@ void CNF::clausify(Formula* f)
   Stack<std::pair<TodoTag,TodoVal>> todo;
   todo.push(std::make_pair<TodoTag,TodoVal>(MAIN,{.aFla = f}));
 
+  // the index of the current argument of each enclosing conjunction, recorded
+  // for the proof
+  Stack<std::pair<Formula*, unsigned>> conjuncts;
+
   do {
     ASS(todo.isNonEmpty());
     auto task = todo.pop();
@@ -161,8 +166,10 @@ void CNF::clausify(Formula* f)
           _literals.push(f->literal());
           if (_formulas.isEmpty()) {
             // collect the clause
-            _result->push(Clause::fromStack(_literals,
-                FormulaClauseTransformation(InferenceRule::CLAUSIFY,_unit)));
+            Clause* clause = Clause::fromStack(_literals,
+                FormulaClauseTransformation(InferenceRule::CLAUSIFY,_unit));
+            InferenceStore::instance()->recordConjunctChoices(clause, conjuncts);
+            _result->push(clause);
             _literals.pop();
           }
           else {
@@ -178,6 +185,7 @@ void CNF::clausify(Formula* f)
           {
             FormulaList* fl = f->args();
             if (FormulaList::isNonEmpty(fl)) {
+              conjuncts.push({f, 0});
               todo.push(std::make_pair<TodoTag,TodoVal>(AND_REST,
                 {.aFlist = fl->tail()}));
               todo.push(std::make_pair<TodoTag,TodoVal>(MAIN,
@@ -219,10 +227,13 @@ void CNF::clausify(Formula* f)
       case AND_REST: {
         FormulaList* fl = task.second.aFlist;
         if (FormulaList::isNonEmpty(fl)) {
+          conjuncts.top().second++;
           todo.push(std::make_pair<TodoTag,TodoVal>(AND_REST,
             {.aFlist = fl->tail()}));
           todo.push(std::make_pair<TodoTag,TodoVal>(MAIN,
             {.aFla = fl->head()}));
+        } else {
+          conjuncts.pop();
         }
         break;
       }

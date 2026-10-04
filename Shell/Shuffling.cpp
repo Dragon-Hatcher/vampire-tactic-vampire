@@ -17,6 +17,7 @@
 #include "Lib/DArray.hpp"
 
 #include "Kernel/Clause.hpp"
+#include "Kernel/InferenceStore.hpp"
 #include "Kernel/FormulaUnit.hpp"
 #include "Kernel/Inference.hpp"
 #include "Kernel/Problem.hpp"
@@ -76,6 +77,10 @@ void Shuffling::polarityFlip(Problem& prb)
     if (modified) {
       Clause* nc = Clause::fromStack(newLits,
         NonspecificInferenceMany(InferenceRule::POLARITY_FLIPPING,UnitList::singleton(cl)));
+      // the first flipped clause marks where the predicates change meaning
+      if (!InferenceStore::instance()->polarityFlipBoundary()) {
+        InferenceStore::instance()->recordPolarityFlipBoundary(nc->number());
+      }
       u = nc; // replace the original in the Problem's list
     }
   }
