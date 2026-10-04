@@ -21,6 +21,8 @@
 
 #include "Inferences/InferenceEngine.hpp"
 #include "Kernel/ALASCA.hpp"
+#include "Kernel/InferenceStore.hpp"
+#include "Kernel/Substitution.hpp"
 #include "Saturation/SaturationAlgorithm.hpp"
 #include "Superposition.hpp"
 #include "FourierMotzkin.hpp"
@@ -70,6 +72,28 @@ class FloorBounds
         GeneratingInference1(InferenceRule::ALASCA_FLOOR_BOUNDS, premise.clause()));
   }
 
+  /**
+   * `resClause`, also recording which of the rule's six cases applied, the
+   * floor `⌊s⌋`, the other term `t`, the absolute value of the coefficient
+   * `k` of the floor, and the literals built.
+   */
+  template<class Premise, class... Lits>
+  static Clause* recorded(Premise const& premise, unsigned variant, TermList other,
+      TermList factor, Lits... lits) {
+    Clause* cl = resClause(premise, lits...);
+    if (!InferenceStore::recording()) {
+      return cl;
+    }
+    InferenceStore::instance()->recordPremiseUse(cl, premise.clause(), premise.literal(),
+      premise.selectedAtom(), 0, Substitution());
+    InferenceStore::instance()->recordOther(cl, premise.clause(), other);
+    InferenceStore::instance()->recordFactor(cl, premise.clause(), factor);
+    Stack<Literal*> built;
+    (built.push(lits), ...);
+    InferenceStore::instance()->recordIntroduced(cl, built, variant);
+    return cl;
+  }
+
   auto generateClauses(Superposition::Lhs const& premise) const
   {
     auto s = NumTraits::ifFloor(premise.selectedAtom(), [](auto s) { return s; }).unwrap();
@@ -79,8 +103,8 @@ class FloorBounds
     // C \/ t − s + 1 > 0
     // C \/ s − t ≥ 0
     return iterItems<Clause*>(
-        resClause(premise, greater0(sum(t, minus(s), numeral(1)))),
-        resClause(premise, geq0(sum(s, minus(t))))
+        recorded(premise, 0, t, premise.factor(), greater0(sum(t, minus(s), numeral(1)))),
+        recorded(premise, 1, t, premise.factor(), geq0(sum(s, minus(t))))
         );
   }
 
@@ -91,19 +115,20 @@ class FloorBounds
     auto t = premise.notSelectedTerm();
     auto pred = premise.alascaPredicate().unwrap();
     ASS(isInequality(pred))
+    auto k = NumTraits::constantTl(premise.template numeral<NumTraits>().abs());
 
 
     return iterItems(
         // +⌊s⌋ >=  -t       x - ⌊x⌋ >= 0
         // ================================
         // C ∨ s + ⌊t⌋ > 0 ∨ ⌊s⌋ + ⌊t⌋ ≈ 0
-          pred == AlascaPredicate::GREATER_EQ ? resClause(premise, 
+          pred == AlascaPredicate::GREATER_EQ ? recorded(premise, 2, t, k,
               greater0(sum(s, floor(t))), 
               eq0(sum(floor(s), floor(t))))
         // +⌊s⌋ + t > 0      
         // ======================================
         // +s + ⌈t⌉ - 1 > 0 \/  ⌊s⌋ + ⌈t⌉ - 1 = 0
-        : pred == AlascaPredicate::GREATER    ? resClause(premise, 
+        : pred == AlascaPredicate::GREATER    ? recorded(premise, 3, t, k,
             greater0(sum(s, ceil(t), numeral(-1))),
             eq0(sum(floor(s), ceil(t), numeral(-1))))
         : assertionViolation<Clause*>()
@@ -118,18 +143,19 @@ class FloorBounds
     auto t = premise.notSelectedTerm();
     auto pred = premise.alascaPredicate().unwrap();
     ASS(isInequality(pred))
+    auto k = NumTraits::constantTl(premise.template numeral<NumTraits>().abs());
 
     return iterItems(
           //       -⌊s⌋ + t >= 0        
           // ============================
           // −s + ⌊t⌋ > 0 ∨ -⌊s⌋ + ⌊t⌋ ≈ 0
-            pred == AlascaPredicate::GREATER_EQ ? resClause(premise, 
+            pred == AlascaPredicate::GREATER_EQ ? recorded(premise, 4, t, k,
                                greater0(sum(minus(s), floor(t))),
                                eq0(sum(minus(floor(s)), floor(t))))
           //             -⌊s⌋ + t > 0
           // =====================================
           // −⌊s⌋ + ⌈t⌉ − 1 ≈ 0 ∨ −s + ⌈t⌉ − 1 > 0
-          : pred == AlascaPredicate::GREATER ?  resClause(premise, 
+          : pred == AlascaPredicate::GREATER ?  recorded(premise, 5, t, k,
                                greater0(sum(minus(s), ceil(t), numeral(-1))),
                                eq0(sum(minus(floor(s)), ceil(t), numeral(-1))))
           : assertionViolation<Clause*>()

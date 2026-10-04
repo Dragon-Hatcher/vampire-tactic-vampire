@@ -261,10 +261,10 @@ namespace viras {
                                           )
                                          | iter_dbg(2, "  fin");
                               return std::move(fin)
-                              | iter::map([this,&lits,x](auto t) { return this->vsubs_aperiodic(lits, x, t); });
+                              | iter::map([this,&lits,x](auto t) { return std::make_pair(t, this->vsubs_aperiodic(lits, x, t)); });
                             }()))
                    else____( ([&]() {
-                         auto out = iter::vals(vsubs_aperiodic(lits, x, vt));
+                         auto out = iter::vals(std::make_pair(vt, vsubs_aperiodic(lits, x, vt)));
                          return out;
                        }()));
     }
@@ -283,7 +283,11 @@ namespace viras {
       return quantifier_elimination(*var_ptr, *lits_ptr)
         | iter::store_value(std::move(lits))
         | iter::store_value(std::move(var))
-        | iter::map([&](auto lits) { return std::move(lits) | iter::map([](auto lit) { return lit.inner; }); });
+        // pair each conclusion with the virtual term that produced it
+        | iter::map([&](auto vtLits) {
+            return std::make_pair(std::move(vtLits.first),
+              std::move(vtLits.second) | iter::map([](auto lit) { return lit.inner; }));
+          });
     }
 
     LiraLiteral<C> analyse(typename C::Var x, typename C::Literal l) {

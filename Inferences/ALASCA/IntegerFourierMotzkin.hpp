@@ -18,6 +18,8 @@
 
 #include "FourierMotzkin.hpp"
 #include "Coherence.hpp"
+#include "Kernel/InferenceStore.hpp"
+#include "Kernel/Substitution.hpp"
 
 namespace Inferences {
 namespace ALASCA {
@@ -44,6 +46,36 @@ struct IntegerFourierMotzkinConf
                       prem1, varBank1,
                       prem2, varBank2, uwa).intoIter(); }
 
+  /**
+   * Record each premise's substitution and the terms the conclusion is built
+   * of: `k0 s` and `t0` of the first premise, `-k1 s` and `t1` of the second,
+   * `u` and `j` of the third (null for floor Fourier-Motzkin).
+   */
+  static void recordUses(Clause* cl,
+      Premise0 const& prem0, unsigned varBank0,
+      Premise1 const& prem1, unsigned varBank1,
+      Premise2 const* prem2, unsigned varBank2,
+      AbstractingUnifier& uwa)
+  {
+    auto record = [&](Clause* premise, unsigned bank, Literal* on, TermList term, TermList other) {
+      Substitution s = InferenceStore::bankSubstitution(premise, uwa.subs(), bank);
+      InferenceStore::instance()->recordPremiseUse(cl, premise, on, term, 0, s);
+      InferenceStore::instance()->recordOther(cl, premise, other);
+    };
+    // `k s` rather than `s`, as the premise is `k s + r > 0` and `t = r / |k|`
+    auto monomial = [](auto const& prem) {
+      return NumTraits::mul(NumTraits::constantTl(prem.template numeral<NumTraits>()), prem.selectedAtom());
+    };
+    record(prem0.clause(), varBank0, prem0.literal(), monomial(prem0), prem0.notSelectedTerm());
+    record(prem1.clause(), varBank1, prem1.literal(), monomial(prem1), prem1.notSelectedTerm());
+    if (prem2) {
+      record(prem2->clause(), varBank2, prem2->self.literal(), prem2->u(), NumTraits::constantTl(prem2->j()));
+      // `j` is the absolute value of the coefficient of `s`
+      if (!prem2->rawJ().isPositive())
+        InferenceStore::instance()->recordNegated(cl, prem2->clause());
+    }
+  }
+
   // prem0:  s + t0 > 0
   // prem1: -s + t1 > 0
   // prem2: isInt(j s + u)
@@ -57,7 +89,7 @@ struct IntegerFourierMotzkinConf
   {
     if (!prem0.numTraitsIs<NumTraits>()) return {};
     auto sigma2 = [&](auto t)  { return uwa.subs().apply(t, varBank2); };
-    return applyRule__(prem0, varBank0,
+    auto out = applyRule__(prem0, varBank0,
                        prem1, varBank1,
                        prem2.j(),
                        sigma2(prem2.u()),
@@ -70,6 +102,9 @@ struct IntegerFourierMotzkinConf
                             Inference(GeneratingInferenceMany(Kernel::InferenceRule::ALASCA_INTEGER_FOURIER_MOTZKIN, UnitList::fromIterator(iterItems(prem0.clause(), prem1.clause(), prem2.clause()))))
                          );
                        });
+    if (out.isSome() && InferenceStore::recording())
+      recordUses(*out, prem0, varBank0, prem1, varBank1, &prem2, varBank2, uwa);
+    return out;
   }
 
   // prem0: C0 \/ s + t0 > 0
@@ -97,7 +132,13 @@ struct IntegerFourierMotzkinConf
     ASS(j.isPositive())
     // auto s_sigma = sigma0(prem0.selectedTerm());
 
-    auto ceil = [](auto x) { return NumTraits::minus(NumTraits::floor(NumTraits::minus(x))); };
+    // the floor each ceiling is built from, if any
+    TermList floorArg0 = TermList::empty();
+    TermList floorArg1 = TermList::empty();
+    auto ceil = [](auto x, TermList& floorArg) {
+      floorArg = NumTraits::minus(x);
+      return NumTraits::minus(NumTraits::floor(floorArg));
+    };
     auto sum = [](auto... xs) { return NumTraits::sum(iterItems(TermList(xs)...)); };
     auto mul = [](auto l, auto r) { return NumTraits::mul(NumTraits::constantTl(l), r); };
 
@@ -118,7 +159,7 @@ struct IntegerFourierMotzkinConf
       // <-> s + (u + ⌈j t0 - u⌉ - 1)/j >= 0
       //         ^^^^^^^^^^^^^^^^^^^^^^--> t0_strengthened
       : mul(1/j, sum( u_s 
-                    , ceil(sum(mul(j, t0_s), NumTraits::minus(u_s)))
+                    , ceil(sum(mul(j, t0_s), NumTraits::minus(u_s)), floorArg0)
                     , NumTraits::constantTl(-1)));
 
     auto t1_strengthened = p1 == AlascaPredicate::GREATER_EQ 
@@ -131,21 +172,31 @@ struct IntegerFourierMotzkinConf
       // <-> -s + (- u + ⌈j t1 + u⌉ - 1)/j >= 0
       //          ^^^^^^^^^^^^^^^^^^^^^^^^--> t1_strengthened
       : mul(1/j, sum( NumTraits::minus(u_s) 
-                    , ceil(sum(mul(j, t1_s), u_s))
+                    , ceil(sum(mul(j, t1_s), u_s), floorArg1)
                     , NumTraits::constantTl(-1)));
       // : sum(ceil(sum(mul(j, t0_s), NumTraits::minus(u_s))), NumTraits::constantTl(-1));
 
-    return some(mkClause(
+    auto sumLit = NumTraits::greater(true, sum(t0_strengthened, t1_strengthened), NumTraits::constantTl(0));
+    auto eqLit = NumTraits::eq(true, sum(s_s, t0_strengthened), NumTraits::constantTl(0));
+    Clause* out = mkClause(
           concatIters(
             prem0.contextLiterals().map([&](auto l) { return sigma0(l); }),
             prem1.contextLiterals().map([&](auto l) { return sigma1(l); }),
             std::move(c2_s),
             arrayIter(uwa.computeConstraintLiterals()),
-            iterItems(
-              NumTraits::greater(true, sum(t0_strengthened, t1_strengthened), NumTraits::constantTl(0)),
-              NumTraits::eq(true, sum(s_s, t0_strengthened), NumTraits::constantTl(0))
-            )
-          )));
+            iterItems(sumLit, eqLit)
+          ));
+    // record the two literals built, and the floors of their ceilings
+    if (InferenceStore::recording()) {
+      Stack<Literal*> built;
+      built.push(sumLit);
+      built.push(eqLit);
+      Stack<TermList> floors;
+      floors.push(floorArg0);
+      floors.push(floorArg1);
+      InferenceStore::instance()->recordIntroduced(out, built, 0, Stack<Literal*>(), floors);
+    }
+    return some(out);
   }
 };
 

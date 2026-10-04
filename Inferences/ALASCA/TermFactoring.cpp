@@ -19,6 +19,7 @@
 
 #include "Kernel/Clause.hpp"
 #include "Kernel/Inference.hpp"
+#include "Kernel/InferenceStore.hpp"
 #include "Debug/TimeProfiling.hpp"
 
 #include "TermFactoring.hpp"
@@ -157,10 +158,25 @@ Option<Clause*> TermFactoring::applyRule(
   conclusion.push(resLit);
 
   // adding `Cnst`
+  unsigned firstConstraint = conclusion.size();
   conclusion.loadFromIterator(cnst->iterFifo());
 
   Inference inf(GeneratingInference1(Kernel::InferenceRule::ALASCA_TERM_FACTORING, sel1.clause()));
   auto clause = Clause::fromStack(conclusion, inf);
+  // record the literals and atoms factored (unified up to arithmetic), the
+  // unifier, and the constraint literals
+  if (InferenceStore::recording()) {
+    Substitution s = InferenceStore::bankSubstitution(sel1.clause(), uwa->subs(), 0);
+    InferenceStore::instance()->recordPremiseUse(clause, sel1.clause(), sel1.literal(), s1, 0, s);
+    InferenceStore::instance()->recordOther(clause, sel1.clause(), s2);
+    // what the premise's first argument became: the sum, or zero if the
+    // equation is the other way round
+    auto zero = NumTraits::zero();
+    InferenceStore::instance()->recordRewritten(clause, sel1.clause(), sel1.literal(), resLit,
+      !resLit->isEquality() ? TermList::empty()
+        : *sel1.literal()->nthArgument(0) == zero ? zero : resSum);
+    InferenceStore::instance()->recordConstraints(clause, firstConstraint, cnst->size());
+  }
   DEBUG("result: ", *clause);
   return Option<Clause*>(clause);
 }

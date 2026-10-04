@@ -17,6 +17,7 @@
 
 #include "Kernel/Clause.hpp"
 #include "Kernel/Inference.hpp"
+#include "Kernel/InferenceStore.hpp"
 
 #include "Debug/TimeProfiling.hpp"
 
@@ -62,8 +63,11 @@ Clause* Normalization::simplify(Clause* cl)
   TIME_TRACE("perform alasca normalization")
   bool altered = false; 
   Recycled<Stack<Literal*>> out;
+  // what each literal became, and by what factor
+  Stack<InferenceStore::LiteralImage> images;
+  bool recording = InferenceStore::recording();
   for (unsigned i = 0; i < cl->size(); i++) {
-    auto lit = _norm.normalizedLiteral((*cl)[i]);
+    auto [lit, factor] = _norm.normalizedLiteralWithFactor((*cl)[i]);
     altered |= lit != (*cl)[i];
     auto triv = trivial(lit);
     if (triv.isSome()) {
@@ -73,14 +77,18 @@ Clause* Normalization::simplify(Clause* cl)
       } else {
         /* trivialy false literals don't have to be added to the output */
         altered = true;
+        if (recording) images.push({(*cl)[i], nullptr, factor});
       }
     } else {
+      if (recording) images.push({(*cl)[i], lit, factor});
       out->push(lit);
     }
   }
   if (altered) {
     Inference inf(SimplifyingInference1(Kernel::InferenceRule::ALASCA_NORMALIZATION, cl));
     auto outCl = Clause::fromStack(*out, inf);
+    InferenceStore::instance()->recordLiteralImages(outCl,
+        InferenceStore::LiteralProcedure::ALASCA_NORMALIZATION, std::move(images));
     DEBUG_NORMALIZE(0, *cl, " ==> ", *outCl)
     return outCl;
   } else {

@@ -28,6 +28,8 @@
 #include "Lib/Reflection.hpp"
 #include "Lib/BacktrackableCollections.hpp"
 #include "Kernel/EqHelper.hpp"
+#include "Kernel/InferenceStore.hpp"
+#include "Kernel/Substitution.hpp"
 
 #define DEBUG_COHERENCE(lvl, ...) if (lvl < 0) DBG(__VA_ARGS__)
 
@@ -197,20 +199,39 @@ public:
     auto js_u = add(mul(j, lhs.s()), lhs.u());
     auto js_uσ = sigmaL(js_u);
 
-    return someIf(i != 0, [&]() {
-        return Clause::fromIterator(
+    if (i == 0) return Option<Clause*>().intoIter();
+    auto rewritten = EqHelper::replace(Lσ, toRewriteσ,
+                // TermList::var(0)
+                add(floor(add(ks_tσ, mul(-i, js_uσ))), mul(i, js_uσ)));
+    auto out = Clause::fromIterator(
           concatIters(
             lhs.contextLiterals().map([=](auto l) { return sigmaL(l); }),
             rhs.contextLiterals().map([=](auto l) { return sigmaR(l); }),
             arrayIter(*cnstr).map([](auto& literal) { return literal; }),
-            iterItems(EqHelper::replace(Lσ, toRewriteσ, 
-                // TermList::var(0)
-                add(floor(add(ks_tσ, mul(-i, js_uσ))), mul(i, js_uσ))
-            ))
+            iterItems(rewritten)
           ), 
           Inference(GeneratingInference2(Kernel::InferenceRule::ALASCA_COHERENCE, lhs.clause(), rhs.clause()))
           );
-        }).intoIter();
+    if (InferenceStore::recording()) {
+      // record the rewritten literal
+      Stack<Literal*> built;
+      built.push(rewritten);
+      InferenceStore::instance()->recordIntroduced(out, built);
+      // record each premise's substitution and the terms used:
+      // `j s + u` and `i` of the first, the rewritten floor of the second
+      auto record = [&](Clause* premise, unsigned bank, Literal* on, TermList term) {
+        Substitution s = InferenceStore::bankSubstitution(premise, uwa.subs(), bank);
+        InferenceStore::instance()->recordPremiseUse(out, premise, on, term, 0, s);
+      };
+      record(lhs.clause(), lhsVarBank, lhs.self.literal(), js_u);
+      InferenceStore::instance()->recordOther(out, lhs.clause(),
+          NumTraits::constantTl(typename NumTraits::ConstantType(i)));
+      // `j` is the absolute value of the coefficient of `s`
+      if (!lhs.rawJ().isPositive())
+        InferenceStore::instance()->recordNegated(out, lhs.clause());
+      record(rhs.clause(), rhsVarBank, rhs.self.literal(), rhs.toRewrite);
+    }
+    return some(out).intoIter();
   }
 };
 
@@ -246,12 +267,20 @@ struct CoherenceNormalization : SimplifyingGeneratingInference {
     if (_shared.norm().equivalent(floor_s, floor_t) ) {
       return {};
     } else {
-      return some(Clause::fromIterator(
+      auto normalized = NumTraits::eq(true, t, floor_t);
+      auto out = Clause::fromIterator(
           concatIters(
             prem.contextLiterals(),
-            iterItems(NumTraits::eq(true, t, floor_t))
+            iterItems(normalized)
           ),
-          Inference(GeneratingInference1(InferenceRule::ALASCA_COHERENCE_NORMALIZATION, prem.clause()))));
+          Inference(GeneratingInference1(InferenceRule::ALASCA_COHERENCE_NORMALIZATION, prem.clause())));
+      if (InferenceStore::recording()) {
+        // record the built literal
+        Stack<Literal*> built;
+        built.push(normalized);
+        InferenceStore::instance()->recordIntroduced(out, built);
+      }
+      return some(out);
     }
   }
 };

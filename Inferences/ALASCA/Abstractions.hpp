@@ -21,6 +21,7 @@
 
 #include "Kernel/ALASCA/Signature.hpp"
 #include "Kernel/Clause.hpp"
+#include "Kernel/InferenceStore.hpp"
 #include "Kernel/TermIterators.hpp"
 
 #include "Inferences/InferenceEngine.hpp"
@@ -198,20 +199,32 @@ class Abstraction
         .flatMap([&](auto x) { return VariableIterator(x); })
         .map([&](auto t) { return t.var(); })
         .max().unwrapOr(0));
-      return Clause::fromIterator(
+      Literal* disequality = ASig::eq(false, newVar, currentTerm().unwrap());
+      Literal* abstracted = abstractLiteral(newVar);
+      Clause* out = Clause::fromIterator(
           concatIters(
-            iterItems(ASig::eq(false, newVar, currentTerm().unwrap())),
+            iterItems(disequality),
             range(0, clause.current->size())
              .map([&](auto i) -> Literal* {
                if (i != clause.idx) {
                  return (*clause.current)[i];
                } else {
-                 return abstractLiteral(newVar);
+                 return abstracted;
                }
              })
            ),
            // TODO two different abstraction InferenceRules
            Inference(SimplifyingInference1(Kernel::InferenceRule::ALASCA_ABSTRACTION, clause.current)));
+      // record the abstracted term and the literal it was abstracted in
+      if (InferenceStore::recording()) {
+        Stack<Literal*> abstractions;
+        abstractions.push(disequality);
+        Stack<std::pair<Literal*, Literal*>> rewritten;
+        rewritten.push({(*clause.current)[clause.idx], abstracted});
+        InferenceStore::instance()->recordAbstraction(out, clause.current, abstractions,
+          rewritten, newVar.var());
+      }
+      return out;
     }
 
     TermList abstractTerm(unsigned depth, TermList newVar) const {

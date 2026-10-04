@@ -14,6 +14,8 @@
 
 #include "FourierMotzkin.hpp"
 #include "Debug/TimeProfiling.hpp"
+#include "Kernel/InferenceStore.hpp"
+#include "Kernel/Substitution.hpp"
 
 #define DEBUG_FM(lvl, ...) if (lvl <= 0) DBG(__VA_ARGS__)
 
@@ -145,27 +147,49 @@ Option<Clause*> FourierMotzkinConf::applyRule_(
       resolventTerm = add(resolventTerm, NumTraits::constantTl(-1));
     }
 
+    // the resolvent, and the equation if both premises are tight
+    Stack<Literal*> introduced;
 #if __ALASCA_Inferences_FM_DERIVE_EQUALITIES
     // (k t₁ + j t₂ > 0)σ
     out.push(NumTraits::greater(true, resolventTerm, NumTraits::zero()));
+    introduced.push(out.top());
 
     if (tight) {
       auto rhsSum = // -> (-k s₂ + t₂)σ
         sigma(rhs.literal(), rhsVarBank)->termArg(0);
       out.push(NumTraits::eq(true, rhsSum, NumTraits::zero()));
+      introduced.push(out.top());
     }
 #else 
                    // (k t₁ + j t₂ >= 0)σ
     out.push(tight ? NumTraits::geq    (true, resolventTerm, NumTraits::zero())
                    // (k t₁ + j t₂ > 0)σ
                    : NumTraits::greater(true, resolventTerm, NumTraits::zero()));
+    introduced.push(out.top());
 
 #endif
 
     out.loadFromIterator(cnst->iterFifo());
 
     Inference inf(GeneratingInference2(Kernel::InferenceRule::ALASCA_FOURIER_MOTZKIN, lhs.clause(), rhs.clause()));
+    unsigned firstConstraint = out.size() - cnst->size();
     auto cl = Clause::fromStack(out, inf);
+    // record each premise's literal, unified atom (up to arithmetic) and
+    // substitution, and the constraint literals
+    if (InferenceStore::recording()) {
+      auto record = [&](Clause* premise, unsigned bank, Literal* on, TermList atom) {
+        Substitution s = InferenceStore::bankSubstitution(premise, uwa.subs(), bank);
+        InferenceStore::instance()->recordPremiseUse(cl, premise, on, atom, 0, s);
+      };
+      // the coefficients of the atom: `j` of the first, `|k|` of the second
+      record(lhs.clause(), lhsVarBank, lhs.literal(), s1);
+      InferenceStore::instance()->recordOther(cl, lhs.clause(), NumTraits::constantTl(j));
+      record(rhs.clause(), rhsVarBank, rhs.literal(), s2);
+      InferenceStore::instance()->recordOther(cl, rhs.clause(), NumTraits::constantTl(k));
+      InferenceStore::instance()->recordIntroduced(cl, introduced);
+      InferenceStore::instance()->recordConstraints(cl, firstConstraint,
+        cnst->size());
+    }
     DEBUG_FM(1, "out: ", *cl);
     return Option<Clause*>(cl);
   });

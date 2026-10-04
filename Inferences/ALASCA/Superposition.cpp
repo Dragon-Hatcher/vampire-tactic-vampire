@@ -17,6 +17,7 @@
 #include "Lib/Metaiterators.hpp"
 #include "Debug/TimeProfiling.hpp"
 #include "Kernel/EqHelper.hpp"
+#include "Kernel/InferenceStore.hpp"
 
 #define DEBUG(lvl, ...) if (lvl < 0) DBG(__VA_ARGS__)
 
@@ -103,6 +104,9 @@ Option<Clause*> SuperpositionConf::applyRule_(
   // •    L[s2]σ  ∈ Lit+ and L[s2]σ /⪯ C2σ
   //   or L[s2]σ /∈ Lit+ and L[s2]σ /≺ C2σ
   auto L2σ = sigma(rhs.literal(), rhsVarBank);
+  // the other literals of the rewritten premise changed by simultaneous
+  // superposition, and what each became
+  Stack<std::pair<Literal*, Literal*>> alsoRewritten;
   bool inLitPlus = rhs.inLitPlus();
   check_side_condition(
       inLitPlus ? "L[s2]σ /⪯ C2σ"
@@ -111,7 +115,11 @@ Option<Clause*> SuperpositionConf::applyRule_(
            .all([&](auto L) {
              auto Lσ = sigma(L, rhsVarBank);
              if (_simultaneousSuperposition) {
-               concl.push(EqHelper::replace(Lσ, s2σ, tσ));
+               auto replaced = EqHelper::replace(Lσ, s2σ, tσ);
+               if (InferenceStore::recording() && replaced != Lσ) {
+                 alsoRewritten.push({L, replaced});
+               }
+               concl.push(replaced);
              } else {
                concl.push(Lσ);
              }
@@ -145,7 +153,39 @@ Option<Clause*> SuperpositionConf::applyRule_(
   concl.loadFromIterator(cnst->iterFifo());
 
   Inference inf(GeneratingInference2(Kernel::InferenceRule::ALASCA_SUPERPOSITION, lhs.clause(), rhs.clause()));
+  unsigned firstConstraint = concl.size() - cnst->size();
   auto out = Clause::fromStack(concl, inf);
+  // record the equation and side used, the literal and subterm rewritten,
+  // and each premise's substitution; in premise order, so that
+  // self-superposition can be told apart
+  if (InferenceStore::recording()) {
+    auto record = [&](Clause* premise, unsigned bank, Literal* on, TermList term,
+                      unsigned flags) {
+      Substitution s = InferenceStore::bankSubstitution(premise, uwa.subs(), bank);
+      InferenceStore::instance()->recordPremiseUse(out, premise, on, term, flags, s);
+    };
+    record(lhs.clause(), lhsVarBank, lhs.literal(), lhs.biggerSide(), 0);
+    // an arithmetic equation `k s + t = 0` rewrites `s` to `-t/k`, which is not one of its sides
+    auto eq = lhs.literal();
+    auto t = lhs.smallerSide();
+    if (!(eq->isEquality() && (*eq->nthArgument(0) == t || *eq->nthArgument(1) == t))) {
+      InferenceStore::instance()->recordOther(out, lhs.clause(), t);
+      InferenceStore::instance()->recordFactor(out, lhs.clause(), lhs.factor());
+    }
+    record(rhs.clause(), rhsVarBank, rhs.literal(), s2,
+      _simultaneousSuperposition ? InferenceStore::rewritesWholePremise : 0);
+    auto rewritten = [&](Literal* from, Literal* to) {
+      TermList lhsArg = from->isEquality()
+        ? EqHelper::replace(sigma(from->termArg(0), rhsVarBank), s2σ, tσ)
+        : TermList::empty();
+      InferenceStore::instance()->recordRewritten(out, rhs.clause(), from, to, lhsArg);
+    };
+    rewritten(rhs.literal(), resolvent);
+    for (auto [from, to] : iterTraits(alsoRewritten.iter())) {
+      rewritten(from, to);
+    }
+    InferenceStore::instance()->recordConstraints(out, firstConstraint, cnst->size());
+  }
   DEBUG(1, "out: ", *out);
   return Option<Clause*>(out);
 }

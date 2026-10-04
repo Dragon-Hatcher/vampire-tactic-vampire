@@ -11,7 +11,9 @@
 
 #include "VIRAS.hpp"
 #include "Kernel/Inference.hpp"
+#include "Kernel/InferenceStore.hpp"
 #include "Kernel/NumTraits.hpp"
+#include "Kernel/Substitution.hpp"
 #include "Lib/Option.hpp"
 
 #include "Saturation/SaturationAlgorithm.hpp"
@@ -127,16 +129,44 @@ Option<SimplifyingGeneratingInference::ClauseGenerationResult> VirasQuantifierEl
     return {};
   } else {
     auto var = typename VampireVirasConfig<NumTraits>::VarWrapper(TermList::var(*unshielded));
+    unsigned elimVar = *unshielded;
     return some(ClauseGenerationResult {
       .clauses = pvi(
           intoVampireIter(viras.quantifier_elimination(var, &*toElim))
-            .map([premise, otherLits = std::move(otherLits)](auto litIter) {
-              return Clause::fromIterator(
-                  concatIters(
-                    intoVampireIter(litIter),
-                    otherLits->iter()
-                    ),
+            .map([premise, elimVar, toElim = Stack<Literal*>(*toElim), otherLits = std::move(otherLits)](auto vtLits) {
+              auto& vt = vtLits.first;
+              auto litIter = std::move(vtLits.second);
+              // what each premise literal became: the eliminated ones in order,
+              // then the others unchanged
+              bool recording = InferenceStore::recording();
+              Stack<Literal*> lits;
+              Stack<InferenceStore::LiteralImage> images;
+              unsigned i = 0;
+              for (auto lit : iterTraits(intoVampireIter(std::move(litIter)))) {
+                if (recording) images.push({toElim[i++], lit, RationalConstantType(1)});
+                lits.push(lit);
+              }
+              for (unsigned j = 0; j < otherLits->size(); j++) {
+                Literal* lit = (*otherLits)[j];
+                if (recording) images.push({lit, lit, RationalConstantType(1)});
+                lits.push(lit);
+              }
+              auto cl = Clause::fromStack(lits,
                   Inference(SimplifyingInference1(InferenceRule::ALASCA_VIRAS_QE, premise)));
+              if (!recording) {
+                return cl;
+              }
+              InferenceStore::instance()->recordLiteralImages(cl,
+                InferenceStore::LiteralProcedure::VIRAS, std::move(images));
+              // record the eliminated variable and the virtual term substituted for it
+              unsigned flags = (vt.epsilon ? InferenceStore::virtualEpsilon : 0)
+                | (vt.infty && vt.infty->positive ? InferenceStore::virtualPlusInfinity : 0)
+                | (vt.infty && !vt.infty->positive ? InferenceStore::virtualMinusInfinity : 0);
+              InferenceStore::instance()->recordPremiseUse(cl, premise,
+                nullptr, TermList::var(elimVar), flags, Substitution());
+              if (vt.term)
+                InferenceStore::instance()->recordOther(cl, premise, vt.term->inner);
+              return cl;
             })
           )
         ,

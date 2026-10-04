@@ -15,6 +15,7 @@
 
 #include "EqFactoring.hpp"
 #include "Debug/TimeProfiling.hpp"
+#include "Kernel/InferenceStore.hpp"
 
 #define DEBUG(...) // DBG(__VA_ARGS__)
 
@@ -110,11 +111,29 @@ Option<Clause*> EqFactoring::applyRule(SelectedEquality const& l1, SelectedEqual
   auto res = Literal::createEquality(false, t1σ, t2σ, srt);
   concl.push(res);
 
+  unsigned firstConstraint = concl.size();
   // adding Cnst
   concl.loadFromIterator(cnst->iterFifo());
 
   Inference inf(GeneratingInference1(Kernel::InferenceRule::ALASCA_EQ_FACTORING, l1.clause()));
   auto out = Clause::fromStack(concl, inf);
+  // record the literals and atoms factored (unified up to arithmetic), the
+  // unifier, and the constraint literals
+  if (InferenceStore::recording()) {
+    Substitution s = InferenceStore::bankSubstitution(l1.clause(), uwa.subs(), 0);
+    // each equation `s ≈ t` with its coefficient `k` if arithmetic (`k s + … = 0`):
+    // first the one kept, then the one replaced by the disequality
+    InferenceStore::instance()->recordPremiseUse(out, l1.clause(), l1.literal(), s1, 0, s);
+    InferenceStore::instance()->recordOther(out, l1.clause(), t1);
+    InferenceStore::instance()->recordFactor(out, l1.clause(), l1.factor());
+    InferenceStore::instance()->recordPremiseUse(out, l1.clause(), l2.literal(), s2, 0, s);
+    InferenceStore::instance()->recordOther(out, l1.clause(), t2);
+    InferenceStore::instance()->recordFactor(out, l1.clause(), l2.factor());
+    Stack<Literal*> built;
+    built.push(res);
+    InferenceStore::instance()->recordIntroduced(out, built);
+    InferenceStore::instance()->recordConstraints(out, firstConstraint, cnst->size());
+  }
   DEBUG("out: ", *out);
   return Option<Clause*>(out);
 }

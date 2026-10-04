@@ -16,6 +16,7 @@
 #include "InequalityFactoring.hpp"
 #include "Debug/Assertion.hpp"
 #include "Debug/TimeProfiling.hpp"
+#include "Kernel/InferenceStore.hpp"
 
 #include "Saturation/SaturationAlgorithm.hpp"
 
@@ -137,6 +138,7 @@ Option<Clause*> InequalityFactoring::applyRule(
       "(j s1 + t1 >1 0)σ /≺ (k s2 + t2 >2 0 \\/ C)σ or (k s2 + t2 >2 0)σ /≺ (j s1 + t1 >1 0 \\/ C)σ",
       cond1 || cond2);
 
+  unsigned firstConstraint = concl.size();
   // adding `Cnst`
   concl.loadFromIterator(cnst->iterFifo());
 
@@ -163,6 +165,22 @@ Option<Clause*> InequalityFactoring::applyRule(
 
   Inference inf(GeneratingInference1(Kernel::InferenceRule::ALASCA_LITERAL_FACTORING, premise));
   auto out = Clause::fromStack(concl, inf);
+  // record the literals and atoms factored (unified up to arithmetic), the
+  // unifier, and the constraint literals
+  if (InferenceStore::recording()) {
+    Substitution s = InferenceStore::bankSubstitution(premise, uwa->subs(), 0);
+    // each inequality with the coefficient of its atom: first the one the
+    // pivot is built from, then the one kept
+    InferenceStore::instance()->recordPremiseUse(out, premise, l1.literal(), s1, 0, s);
+    InferenceStore::instance()->recordOther(out, premise, s2);
+    InferenceStore::instance()->recordFactor(out, premise, NumTraits::constantTl(j));
+    InferenceStore::instance()->recordPremiseUse(out, premise, l2.literal(), s2, 0, s);
+    InferenceStore::instance()->recordFactor(out, premise, NumTraits::constantTl(k));
+    Stack<Literal*> built;
+    built.push(pivotLit);
+    InferenceStore::instance()->recordIntroduced(out, built);
+    InferenceStore::instance()->recordConstraints(out, firstConstraint, cnst->size());
+  }
   DEBUG("conclusion: ", *out)
   return Option<Clause*>(out);
 }
