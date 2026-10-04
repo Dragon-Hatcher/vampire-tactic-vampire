@@ -14,6 +14,7 @@
 
 #include "Debug/TimeProfiling.hpp"
 
+#include "Kernel/InferenceStore.hpp"
 #include "Kernel/HOL/HOL.hpp"
 #include "Lib/Environment.hpp"
 #include "Lib/DArray.hpp"
@@ -429,6 +430,7 @@ SimplifyingGeneratingInference1::Result SimplifyingGeneratingLiteralSimplificati
   DEBUG("in:  ", *cl_)
   auto& cl = *cl_;
   Stack<Literal*> out(cl.size());
+  Stack<InferenceStore::LiteralImage> images;
 
   bool changed = false;
   bool allLessEq = true;
@@ -440,6 +442,7 @@ SimplifyingGeneratingInference1::Result SimplifyingGeneratingLiteralSimplificati
     auto result = simplifyLiteral(orig);
 
     if (result.isLiteral() && result.unwrapLiteral() == orig ) {
+      if (InferenceStore::recording()) images.push({orig, orig, RationalConstantType(1)});
       out.push(orig);
     } else {
       auto simpl = result;
@@ -452,6 +455,7 @@ SimplifyingGeneratingInference1::Result SimplifyingGeneratingLiteralSimplificati
           return SimplifyingGeneratingInference1::Result::tautology();
         } else {
           /* do not add the literal to the output stack */
+          if (InferenceStore::recording()) images.push({orig, nullptr, RationalConstantType(1)});
           changed = true;
         }
 
@@ -460,6 +464,7 @@ SimplifyingGeneratingInference1::Result SimplifyingGeneratingLiteralSimplificati
         Literal* simplLit = simpl.unwrapLiteral();
         ASS_NEQ(simplLit, orig)
         changed = true;
+        if (InferenceStore::recording()) images.push({orig, simplLit, RationalConstantType(1)});
         out.push(simplLit);
 
         if (doOrderingCheck) {
@@ -489,6 +494,10 @@ SimplifyingGeneratingInference1::Result SimplifyingGeneratingLiteralSimplificati
     return SimplifyingGeneratingInference1::Result::nop(cl_);
   } else {
     auto result = Clause::fromStack(out, SimplifyingInference1(_rule, cl_));
+    InferenceStore::instance()->recordLiteralImages(result,
+      _rule == InferenceRule::CANCELLATION ? InferenceStore::LiteralProcedure::CANCELLATION
+                                           : InferenceStore::LiteralProcedure::POLYNOMIAL_EVALUATION,
+      std::move(images));
     DEBUG("out: ", *result)
     return SimplifyingGeneratingInference1::Result{
             .simplified = result, 

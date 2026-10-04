@@ -14,6 +14,8 @@
 #include "Lib/IntUnionFind.hpp"
 #include "Kernel/Ordering.hpp"
 #include "Kernel/PolynomialBottomUpEvaluation.hpp"
+#include "Kernel/InferenceStore.hpp"
+#include "Kernel/Substitution.hpp"
 
 #define DEBUG(...) // DBG(__VA_ARGS__)
 
@@ -75,13 +77,19 @@ static const auto iterVars = [](Clause* cl) {
         { return subterm.template as<Variable>().toOwned(); });
 };
 
+/**
+ * @b witness is a substitution that, applied to the premise, gives the
+ * conclusion (up to arithmetic); it is recorded for the proof.
+ */
 template<class EvalFn>
-SimplifyingGeneratingInference1::Result generalizeBottomUp(Clause* cl, EvalFn eval) 
+SimplifyingGeneratingInference1::Result generalizeBottomUp(Clause* cl, EvalFn eval,
+    Substitution const* witness = nullptr)
 {
   /* apply the selectedGen generalization */
   DEBUG_CODE(bool anyChange = false);
   bool oneLess = false;
   bool allLessEq = true;
+  Stack<InferenceStore::LiteralImage> images;
 
   auto stack = iterTraits(cl->iterLits())
     .map([&](Literal* lit) -> Literal* {
@@ -104,6 +112,9 @@ SimplifyingGeneratingInference1::Result generalizeBottomUp(Clause* cl, EvalFn ev
         auto generalizedLit = Literal::create(
             lit, 
             args.begin());
+        if (InferenceStore::recording()) {
+          images.push({lit, generalizedLit, RationalConstantType(1)});
+        }
 
         if (eval.eval.doOrderingCheck) {
 
@@ -131,8 +142,15 @@ SimplifyingGeneratingInference1::Result generalizeBottomUp(Clause* cl, EvalFn ev
 
   ASS(anyChange)
   Inference inf(SimplifyingInference1(Kernel::InferenceRule::ARITHMETIC_SUBTERM_GENERALIZATION, cl));
+  Clause* simplified = Clause::fromStack(stack, inf);
+  if (witness && InferenceStore::recording()) {
+    InferenceStore::instance()->recordPremiseUse(simplified, cl, nullptr,
+      TermList::empty(), 0, *witness);
+  }
+  InferenceStore::instance()->recordLiteralImages(simplified,
+    InferenceStore::LiteralProcedure::GENERALIZATION, std::move(images));
   return SimplifyingGeneratingInference1::Result{
-    .simplified = Clause::fromStack(stack, inf), 
+    .simplified = simplified,
     .premiseRedundant = (allLessEq && oneLess)
   };
 }
