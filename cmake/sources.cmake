@@ -481,6 +481,8 @@ set(SOURCES
     Kernel/Substitution.hpp
     Kernel/Term.cpp
     Kernel/Term.hpp
+    Kernel/TPTPProofExtra.cpp
+    Kernel/TPTPProofExtra.hpp
     Kernel/TermIterators.cpp
     Kernel/TermIterators.hpp
     Kernel/TermOrderingDiagram.cpp

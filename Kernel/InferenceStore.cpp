@@ -49,6 +49,7 @@
 #include "Term.hpp"
 #include "TermIterators.hpp"
 #include "Theory.hpp"
+#include "TPTPProofExtra.hpp"
 #include "Unit.hpp"
 
 #include <set>
@@ -2067,6 +2068,10 @@ void InferenceStore::outputUnsatCore(std::ostream& out, Unit* refutation)
  */
 void InferenceStore::outputProof(std::ostream& out, Unit* refutation)
 {
+  if (env.options->proof() == Options::Proof::TPTP && recording()) {
+    outputTPTPProofExtra(out, refutation);
+    return;
+  }
   ProofPrinter* p = createProofPrinter(out);
   if (!p) {
     return;

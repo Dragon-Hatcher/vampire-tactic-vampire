@@ -57,6 +57,8 @@ Signature::Symbol::Symbol(unsigned number, const std::string& nm, OperatorType* 
     _deBruijnIndex(-1)
 {
   ASS(_type);
+  static unsigned symbolsCreated = 0;
+  _created = symbolsCreated++;
   if (!preventQuoting && symbolNeedsQuoting(_name, interpreted, arity())) {
     _name="'"+_name+"'";
   }
