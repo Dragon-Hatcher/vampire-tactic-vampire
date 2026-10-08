@@ -32,6 +32,7 @@
 #include "Lib/Environment.hpp"
 #include "Lib/Timer.hpp"
 #include "Lib/List.hpp"
+#include "Lib/Recycled.hpp"
 #include "Lib/Stack.hpp"
 #include "Lib/System.hpp"
 #include "Lib/DHSet.hpp"
@@ -466,17 +467,23 @@ void FiniteModelBuilder::init()
     splitter.apply(_clauses);
   }
 
-  // Normalise in place
-  ClauseList::Iterator it(_clauses);
+  // Normalise variables, into a new clause where that renames any: the clause
+  // may be an input clause, which a proof can show
+  ClauseList::RefIterator it(_clauses);
   while(it.hasNext()){
     Renaming n;
-    Clause* c = it.next();
+    Clause*& c = it.next();
 
-    // cout << "Normalize " << c->toString() <<endl;
+    RStack<Literal*> lits;
+    bool renamed = false;
     for(unsigned i=0;i<c->length();i++){
       Literal* l = (*c)[i];
       n.normalizeVariables(l);
-      (*c)[i] = n.apply(l);
+      lits->push(n.apply(l));
+      renamed |= lits->top() != l;
+    }
+    if (renamed) {
+      c = Clause::fromStack(*lits, NonspecificInference1(InferenceRule::FMB_FLATTENING, c));
     }
 #if VTRACE_FMB
     cout << "Normalized " << c->toString() << endl;
