@@ -90,7 +90,9 @@ void handleSignal (int sigNum)
   case SIGXCPU:
 #endif
     TERMINAL_SIGNAL_HANDLED = true;
-    System::flushAndTerminateImmediately(VAMP_RESULT_STATUS_INTERRUPTED);
+    // not flushing: the signal may have arrived while this thread held the
+    // stream's lock, and flushing would then wait for it forever
+    std::_Exit(VAMP_RESULT_STATUS_INTERRUPTED);
 
   // crashy or impolite interrupts, complain about it
   case SIGABRT:
