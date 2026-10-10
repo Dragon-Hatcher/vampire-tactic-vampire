@@ -60,6 +60,9 @@ private:
   // TODO make this one the same as in AlascaState
   PolynomialEvaluation _inner;
   const bool _alwaysEvaluate;
+  /** whether ALASCA, which works on normal forms only, is what evaluates always */
+  const bool _alasca;
+  const Ordering& _order;
 };
 
 } // namespace Inferences 

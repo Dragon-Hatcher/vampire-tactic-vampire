@@ -32,6 +32,8 @@ PolynomialEvaluationRule::PolynomialEvaluationRule(const Ordering& ordering)
   // TODO we have an additional step of normalization here. simplify!
   , _alwaysEvaluate(env.options->alasca() ||
       env.options->evaluationMode() == Shell::Options::EvaluationMode::POLYNOMIAL_FORCE)
+  , _alasca(env.options->alasca())
+  , _order(ordering)
   {}
 
 
@@ -73,6 +75,14 @@ PolynomialEvaluationRule::Result PolynomialEvaluationRule::simplifyLiteral(Liter
   auto simplified = _inner.tryEvalPredicate(lit, terms.begin());
   anyChange = anyChange || simplified.isSome();
 
+  if (!anyChange && _alwaysEvaluate && !_alasca) {
+    // Only rearranged: kept where that is smaller. Demodulation, by
+    // commutativity among others, rearranges too, into what is smaller, and
+    // the two would otherwise undo each other forever.
+    Literal* rearranged = createLiteral(lit, terms.begin());
+    return LitSimplResult::literal(
+        _order.compare(rearranged, lit) == Ordering::LESS ? rearranged : lit);
+  }
   return anyChange || _alwaysEvaluate
       ? std::move(simplified)
         .unwrapOrElse([&]()
