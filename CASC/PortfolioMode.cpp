@@ -650,11 +650,20 @@ bool PortfolioMode::runScheduleAndRecoverProof(Schedule schedule)
 
   UIHelper::portfolioParent = true; // to report on overall-solving-ended in Timer.cpp
 
+  // when the schedule began and when it found the proof, on the clock from
+  // when vampire started, so that a caller can tell starting up and parsing
+  // from the strategies that ran before the one that won
+  if (outputAllowed())
+    addCommentSignForSZS(cout) << "schedule began at " << Timer::realMilliseconds() << "ms" << endl;
+
   auto result = env.options->heartbeats()
     ? runScheduleByBeats(std::move(schedule))
     : runSchedule(std::move(schedule));
   if(!result)
     return false;
+
+  if (outputAllowed())
+    addCommentSignForSZS(cout) << "proof found at " << Timer::realMilliseconds() << "ms" << endl;
 
   // path to temporary file with the proof in it
   auto path = *result;
