@@ -161,7 +161,7 @@ private:
 
   TermCodeTree<Data> _ct;
   /** How many keys there are with each top symbol, and how many are variables or sorts. */
-  DHMap<unsigned, unsigned> _keysByTop;
+  DHMap<unsigned, unsigned, FnvHash, IdentityHash> _keysByTop;
   unsigned _variableKeys = 0;
 };
 
